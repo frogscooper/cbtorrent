@@ -76,6 +76,7 @@ on completion; use `seed` to continue sharing afterward.
   IPv4 UDP trackers; startup, periodic, completion, and shutdown announces.
 - Explicit peer endpoints (including IPv6), configurable timeouts and concurrency.
 - JSON metrics, per-peer observations, a heuristic, and an optional online bandit.
+- An opt-in adaptive service-time model (`--policy adaptive`) with recent learning.
 - Real loopback TCP/HTTP/UDP tests and paired policy benchmarks.
 
 Run `python -m cbtorrent download --help` for tuning options. Defaults: 4 concurrent
@@ -105,6 +106,32 @@ The policies share the same protocol engine, piece scheduler, and resource caps.
 Corrupt, choked, disconnected, and timed-out peers are retired for the run.
 Changing peers between pieces can reuse cached connections.
 
+`adaptive` learns how long a verified piece takes using a small exponentially
+weighted least-squares model. It discounts old samples when rates change instead
+of averaging all historical throughput. Initial exploration is limited near the
+end of a download. An availability-aware tail planner can briefly defer an idle
+slow peer if an active fast peer is predicted to finish the remaining work sooner;
+it rechecks at 50 ms intervals and refuses to wait on stale progress. The model
+trains only on successfully committed data and uses no future swarm information.
+
+```powershell
+python -m cbtorrent download example.torrent --output downloads/example.bin --policy adaptive
+```
+
+The original heuristic remains the default. See
+[the ML experiment](benchmarks/ML_EXPERIMENT.md) for the evaluation plan, results,
+ablations, and scope of any improvement claims.
+
+`--policy recovery` additionally revisits overlooked peers and detects sustained
+changes in their service cost. Revisits use cached connections and useful pieces,
+reserve at most 1/16 of bytes already verified, and stop near completion. Peers
+that stay unchanged are revisited less often. Two large, consistent prediction
+errors reset stale history; one outlier does not. This can discover recovering
+peers but can also slow downloads when probes find no improvement. The byte
+allocation limit is not a wall-time limit; normal transfer deadlines still apply.
+See [the recovery experiment](benchmarks/RECOVERY_EXPERIMENT.md) for fresh held-out
+results and comparison with an EWMA using the same probing rules.
+
 ## Reproducible benchmark
 
 ```powershell
@@ -116,6 +143,21 @@ and delays. It compares mixed-speed, uniform-speed, and corrupt-peer scenarios.
 Both policies receive the same shuffled peer ordering per trial; execution order
 is randomized and policy state starts fresh. Reports retain raw trials,
 environment/configuration, successes, medians, and sample standard deviations.
+
+Use `--suite development` or `--suite validation` for the distinct ML scenarios.
+The validation suite varies piece size, rates, and speed-change schedules.
+For ablations, `--policies heuristic,adaptive,adaptive-no-defer,planned-heuristic`
+compares recent learning with and without tail deferral and against a planner
+using lifetime throughput. Reports include paired bootstrap intervals and a source
+hash. Per-scenario intervals are descriptive and not multiple-comparison corrected.
+
+The subsequent `recovery-development` and `recovery-validation` suites compare
+`heuristic,adaptive,recovery,recovery-no-probe,ewma-probe`. Schema 3 reports include
+comparisons against each available heuristic/adaptive/EWMA baseline, missing pair
+counts, and maximum as well as median overhead/waste differences. Duplicate trial
+keys are rejected. `recovery-no-probe` isolates the change detector; `ewma-probe`
+uses identical probe eligibility, backoff, and byte limits with a simple moving
+average. Both are benchmark-only ablations.
 
 These small local scenarios are regression/research fixtures. They do not model
 real TCP congestion, NAT, public-swarm churn, or disk contention. Seeder CPU is
@@ -137,6 +179,9 @@ Do not infer public-swarm improvement from a local win.
 | `tracker_response_bytes` | HTTP response bodies or UDP response datagrams, separately from peer traffic. |
 | `connections`, `peer_failures`, `hash_failures` | Outbound connection attempts, retired sessions, and integrity failures. |
 | `policy_seconds` | Time spent selecting peers. |
+| `policy_update_seconds` | Additional time spent training an online policy. |
+| `policy_deferrals` | Scheduling decisions that briefly waited for in-flight work. |
+| `policy_diagnostics` | Recovery-policy counters: revisit selections (`probes`), conservative `reserved_probe_bytes`, successfully committed `training_bytes`, and confirmed `model_resets`. Initial peer discovery is excluded from probes. Reservations are not refunded after failure and do not represent duplicate/wasted payload. |
 
 Metrics are a snapshot before post-completion tracker announcements and final
 connection cleanup. They exclude TCP/IP headers, retransmissions, unconsumed

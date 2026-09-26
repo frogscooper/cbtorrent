@@ -37,14 +37,19 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
                 line = await asyncio.wait_for(seed.stdout.readline(), 10)
                 self.assertIn(b"Seeding", line)
                 port = int(line.strip().rsplit(b":", 1)[1])
-                report_path = root / "reports" / "result.json"
-                report = json.loads(await self.command(
-                    "download", torrent, "--peer", f"127.0.0.1:{port}", "--no-trackers",
-                    "--output", output, "--listen-host", "127.0.0.1", "--policy", "bandit",
-                    "--report", report_path))
-                self.assertEqual(output.read_bytes(), content)
-                self.assertTrue(report["complete"])
-                self.assertEqual(json.loads(report_path.read_text()), report)
+                for policy in ("bandit", "recovery"):
+                    with self.subTest(policy=policy):
+                        report_path = root / "reports" / f"{policy}.json"
+                        target = output.with_name(policy)
+                        report = json.loads(await self.command(
+                            "download", torrent, "--peer", f"127.0.0.1:{port}", "--no-trackers",
+                            "--output", target, "--listen-host", "127.0.0.1", "--policy", policy,
+                            "--report", report_path))
+                        self.assertEqual(target.read_bytes(), content)
+                        self.assertTrue(report["complete"])
+                        self.assertEqual(json.loads(report_path.read_text()), report)
+                        if policy == "recovery":
+                            self.assertEqual(report["policy_diagnostics"]["training_bytes"], len(content))
             finally:
                 if seed.returncode is None:
                     seed.terminate()

@@ -86,7 +86,7 @@ class Peer:
         while self.choked or not self.available:
             await self.receive()
 
-    async def download_piece(self, index, pipeline):
+    async def download_piece(self, index, pipeline, on_block=None):
         size = self.torrent.piece_size(index)
         blocks = [(offset, min(BLOCK_SIZE, size - offset)) for offset in range(0, size, BLOCK_SIZE)]
         pending = {}
@@ -112,6 +112,8 @@ class Peer:
                 del pending[offset]
                 result[offset:offset + len(block)] = block
                 received += len(block)
+                if on_block is not None:
+                    on_block(received)
         return bytes(result)
 
     async def close(self):

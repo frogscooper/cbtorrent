@@ -8,7 +8,7 @@ from unittest.mock import patch
 from cbtorrent.client import DownloadError, download
 from cbtorrent.metainfo import Torrent, create
 from cbtorrent.metrics import Metrics
-from cbtorrent.policy import BanditPolicy, Observation
+from cbtorrent.policy import AdaptivePolicy, BanditPolicy, Observation, RecoveryPolicy
 from cbtorrent.seeder import FileSource, SeedServer
 from cbtorrent.storage import Storage
 from cbtorrent.wire import Peer, message
@@ -111,6 +111,69 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.output.read_bytes(), self.data)
         self.assertEqual(report["policy"], "BanditPolicy")
         self.assertGreater(sum(o["samples"] for o in report["peer_observations"].values()), 0)
+
+    async def test_adaptive_transfer_trains_on_verified_data(self):
+        peers = [await self.seed(latency=0.005), await self.seed()]
+        policy = AdaptivePolicy()
+        report = await download(self.torrent, peers, self.output, policy=policy)
+        self.assertEqual(self.output.read_bytes(), self.data)
+        self.assertEqual(report["policy"], "AdaptivePolicy")
+        self.assertEqual(sum(m.samples for m in policy.models.values()), len(self.torrent.hashes))
+        self.assertEqual(report["wasted_payload_bytes"], 0)
+
+    async def test_adaptive_does_not_train_on_failed_disk_commit(self):
+        peer = await self.seed()
+        policy = AdaptivePolicy()
+        with patch.object(Storage, "write", side_effect=OSError("disk full")):
+            with self.assertRaises(DownloadError):
+                await download(self.torrent, [peer], self.output, policy=policy)
+        self.assertEqual(policy.models, {})
+
+    async def test_recovery_handles_complementary_availability_and_resume(self):
+        self.output.with_suffix(".bin.part").write_bytes(self.data[:32768])
+        count = len(self.torrent.hashes)
+        peers = [await self.seed(range(0, count, 2)), await self.seed(range(1, count, 2))]
+        policy = RecoveryPolicy()
+        report = await asyncio.wait_for(download(
+            self.torrent, peers, self.output, policy=policy, resume=True, timeout=0.2), 5)
+        self.assertEqual(self.output.read_bytes(), self.data)
+        self.assertEqual(report["resumed_bytes"], 32768)
+        self.assertEqual(policy.verified_bytes, len(self.data) - 32768)
+        self.assertEqual(report["wasted_payload_bytes"], 0)
+        self.assertEqual(report["connections"], 2)
+
+    async def test_recovery_cancel_releases_sockets_without_training(self):
+        address = await self.seed(latency=0.2)
+        policy = RecoveryPolicy()
+        task = asyncio.create_task(download(self.torrent, [address], self.output, policy=policy))
+        await asyncio.sleep(0.05)
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        await asyncio.sleep(0.05)
+        self.assertEqual(policy.models, {})
+        self.assertFalse(self.servers[0].tasks)
+        self.assertFalse(self.output.exists())
+
+    async def test_recovery_disk_failure_does_not_train(self):
+        peer = await self.seed()
+        policy = RecoveryPolicy()
+        with patch.object(Storage, "write", side_effect=OSError("disk full")):
+            with self.assertRaises(DownloadError):
+                await download(self.torrent, [peer], self.output, policy=policy)
+        self.assertEqual(policy.models, {})
+        self.assertEqual(policy.verified_bytes, 0)
+
+    async def test_recovery_respects_connection_cap_with_more_peers_than_slots(self):
+        peers = [await self.seed() for _ in range(6)]
+        report = await asyncio.wait_for(download(
+            self.torrent, peers, self.output, policy=RecoveryPolicy(),
+            concurrency=1, max_connections=1, timeout=0.2), 5)
+        self.assertEqual(self.output.read_bytes(), self.data)
+        self.assertEqual(report["wasted_payload_bytes"], 0)
+        self.assertEqual(report["policy_diagnostics"]["probes"], 0)
+        await asyncio.sleep(0.05)
+        self.assertTrue(all(not s.tasks for s in self.servers))
 
     async def test_seed_rejects_file_with_wrong_content(self):
         self.original.write_bytes(b"X" * len(self.data))
