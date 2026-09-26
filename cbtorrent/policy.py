@@ -78,6 +78,7 @@ class SchedulingContext:
     available: dict[tuple[str, int], frozenset[int]]
     active: dict[tuple[str, int], ActiveTransfer]
     concurrency: int
+    piece_size: int = 16384
 
 
 @dataclass
@@ -190,3 +191,118 @@ class PlannedHeuristic(AdaptivePolicy):
 
     def observe(self, peer, size, seconds):
         pass
+
+
+@dataclass
+class ResponsiveModel(ServiceModel):
+    """Reset stale history only after two consistent, large prediction errors.
+
+    A single outlier still receives the ordinary exponentially weighted update.
+    The second sample is compared to the frozen pre-change prediction, avoiding
+    a moving threshold. No timing or peer identity from a fixture is used.
+    """
+    pending: tuple | None = None
+    resets: int = 0
+
+    def update(self, size, seconds):
+        if size <= 0 or not math.isfinite(seconds) or seconds <= 0:
+            raise ValueError("training requires positive bytes and finite positive time")
+        cost = seconds / (size / 16384)
+        reference = self.pending[0] if self.pending else self.predict(16384)
+        direction = 0 if reference is None else (1 if cost > 2 * reference else
+                                                 -1 if cost < reference / 2 else 0)
+        if self.pending and direction == self.pending[1] and direction:
+            _, _, old_size, old_seconds = self.pending
+            self.xx = self.xy = self.yy = self.mass = 0.0
+            self.samples -= 1  # Reinsert the first change sample, once.
+            super().update(old_size, old_seconds)
+            self.pending = None
+            self.resets += 1
+        else:
+            self.pending = (reference, direction, size, seconds) if direction else None
+        super().update(size, seconds)
+
+
+@dataclass
+class EWMAModel:
+    """Stronger simple baseline: an EWMA of seconds per 16 KiB."""
+    forgetting: float = 0.8
+    cost: float | None = None
+    samples: int = 0
+
+    def update(self, size, seconds):
+        if size <= 0 or not math.isfinite(seconds) or seconds <= 0:
+            raise ValueError("training requires positive bytes and finite positive time")
+        cost = seconds / (size / 16384)
+        self.cost = cost if self.cost is None else self.forgetting * self.cost + (1 - self.forgetting) * cost
+        self.samples += 1
+
+    def predict(self, size):
+        return None if self.cost is None else max(0.0001, self.cost * size / 16384)
+
+    def relative_error(self):
+        return 0.25
+
+
+class RecoveryPolicy(AdaptivePolicy):
+    """Revisit stale cached peers with a verified-byte exploration budget.
+
+    At most 1/16 of bytes already verified may be committed to revisits. They
+    fetch useful, unclaimed pieces, never duplicates. This is a byte allocation
+    bound, not a guarantee on elapsed time: a probe may still stall until the
+    engine's existing deadlines. Initial discovery is outside this budget.
+    """
+
+    def __init__(self, *, model_factory=ResponsiveModel, probe=True):
+        super().__init__(defer=False)
+        self.model_factory = model_factory
+        self.probe = probe
+        self.epoch = 0
+        self.last_seen = {}
+        self.verified_bytes = 0
+        self.probe_bytes = 0
+        self.probes = 0
+        self.probe_intervals = {}
+        self.pending_probes = {}
+
+    def diagnostics(self):
+        return dict(probes=self.probes, reserved_probe_bytes=self.probe_bytes,
+                    training_bytes=self.verified_bytes,
+                    model_resets=sum(getattr(m, "resets", 0) for m in self.models.values()))
+
+    def observe(self, peer, size, seconds):
+        model = self.models.setdefault(peer, self.model_factory(self.forgetting))
+        model.update(size, seconds)
+        expected = self.pending_probes.pop(peer, None)
+        if expected is not None:
+            cost = seconds / (size / 16384)
+            interval = self.probe_intervals.get(peer, 16)
+            # Unchanged peers need fewer revisits. A material change restores
+            # the short interval so a second observation can confirm recovery.
+            self.probe_intervals[peer] = min(256, interval * 2) if expected / 2 <= cost <= 2 * expected else 16
+        self.epoch += 1
+        self.last_seen[peer] = self.epoch
+        self.verified_bytes += size
+
+    def choose_with_context(self, peers, observations, context):
+        best = super().choose_with_context(peers, observations, context)
+        if (not self.probe or best not in self.models
+                or context.unclaimed_count <= 4 * context.concurrency
+                or self.probe_bytes + context.piece_size > self.verified_bytes / 16):
+            return best
+        best_time = self.models[best].predict(context.piece_size)
+        # Avoid an expensive known slow probe when too little work remains to
+        # amortize it. This is a prediction gate, not a runtime time budget.
+        horizon = best_time * context.unclaimed_count / context.concurrency
+        stale = [p for p in peers if p != best and p in self.models
+                 and p in context.available  # Only cached sessions; no reconnection cost.
+                 and self.epoch - self.last_seen.get(p, self.epoch) >= self.probe_intervals.get(p, 16)
+                 and self.models[p].predict(context.piece_size) <= 0.2 * horizon]
+        if not stale:
+            return best
+        peer = min(stale, key=lambda p: self.last_seen[p])
+        self.last_seen[peer] = self.epoch  # Reserve before another concurrent decision.
+        self.pending_probes[peer] = self.models[peer].predict(16384)
+        self.probe_bytes += context.piece_size
+        self.probes += 1
+        return peer

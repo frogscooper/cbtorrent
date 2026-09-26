@@ -122,6 +122,16 @@ The original heuristic remains the default. See
 [the ML experiment](benchmarks/ML_EXPERIMENT.md) for the evaluation plan, results,
 ablations, and scope of any improvement claims.
 
+`--policy recovery` additionally revisits overlooked peers and detects sustained
+changes in their service cost. Revisits use cached connections and useful pieces,
+reserve at most 1/16 of bytes already verified, and stop near completion. Peers
+that stay unchanged are revisited less often. Two large, consistent prediction
+errors reset stale history; one outlier does not. This can discover recovering
+peers but can also slow downloads when probes find no improvement. The byte
+allocation limit is not a wall-time limit; normal transfer deadlines still apply.
+See [the recovery experiment](benchmarks/RECOVERY_EXPERIMENT.md) for fresh held-out
+results and comparison with an EWMA using the same probing rules.
+
 ## Reproducible benchmark
 
 ```powershell
@@ -140,6 +150,14 @@ For ablations, `--policies heuristic,adaptive,adaptive-no-defer,planned-heuristi
 compares recent learning with and without tail deferral and against a planner
 using lifetime throughput. Reports include paired bootstrap intervals and a source
 hash. Per-scenario intervals are descriptive and not multiple-comparison corrected.
+
+The subsequent `recovery-development` and `recovery-validation` suites compare
+`heuristic,adaptive,recovery,recovery-no-probe,ewma-probe`. Schema 3 reports include
+comparisons against each available heuristic/adaptive/EWMA baseline, missing pair
+counts, and maximum as well as median overhead/waste differences. Duplicate trial
+keys are rejected. `recovery-no-probe` isolates the change detector; `ewma-probe`
+uses identical probe eligibility, backoff, and byte limits with a simple moving
+average. Both are benchmark-only ablations.
 
 These small local scenarios are regression/research fixtures. They do not model
 real TCP congestion, NAT, public-swarm churn, or disk contention. Seeder CPU is
@@ -163,6 +181,7 @@ Do not infer public-swarm improvement from a local win.
 | `policy_seconds` | Time spent selecting peers. |
 | `policy_update_seconds` | Additional time spent training an online policy. |
 | `policy_deferrals` | Scheduling decisions that briefly waited for in-flight work. |
+| `policy_diagnostics` | Recovery-policy counters: revisit selections (`probes`), conservative `reserved_probe_bytes`, successfully committed `training_bytes`, and confirmed `model_resets`. Initial peer discovery is excluded from probes. Reservations are not refunded after failure and do not represent duplicate/wasted payload. |
 
 Metrics are a snapshot before post-completion tracker announcements and final
 connection cleanup. They exclude TCP/IP headers, retransmissions, unconsumed

@@ -66,6 +66,8 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                                        for (host, peer_port), value in observations.items()}
         result["peer_errors"] = list(peer_errors)
         result["tracker_errors"] = list(tracker_errors)
+        if hasattr(policy, "diagnostics"):
+            result["policy_diagnostics"] = policy.diagnostics()
         return result
 
     async def tracker_update(url, event):
@@ -199,7 +201,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                     context = SchedulingContext(
                         perf_counter(), len(unscheduled), {i: torrent.piece_size(i) for i in tail},
                         {p: frozenset(session.available & tail) for p, session in sessions.items()},
-                        active.copy(), concurrency)
+                        active.copy(), concurrency, torrent.piece_length)
                     address = policy.choose_with_context(candidates, observations, context)
                 else:
                     address = policy.choose(candidates, observations)

@@ -9,7 +9,8 @@ from pathlib import Path
 
 from .client import DownloadError, download
 from .metainfo import create
-from .policy import AdaptivePolicy, BanditPolicy, PlannedHeuristic, ThroughputPolicy
+from .policy import (AdaptivePolicy, BanditPolicy, EWMAModel, PlannedHeuristic,
+                     RecoveryPolicy, ThroughputPolicy)
 from .seeder import FileSource, SeedServer
 
 POLICIES = {
@@ -18,6 +19,9 @@ POLICIES = {
     "adaptive": AdaptivePolicy,
     "adaptive-no-defer": lambda: AdaptivePolicy(defer=False),
     "planned-heuristic": PlannedHeuristic,
+    "recovery": RecoveryPolicy,
+    "recovery-no-probe": lambda: RecoveryPolicy(probe=False),
+    "ewma-probe": lambda: RecoveryPolicy(model_factory=EWMAModel),
 }
 
 
@@ -69,26 +73,55 @@ def scenarios_for(suite, size):
             "corrupt-fast-peer": case([3072, 1792, 640, 320], corrupt=0, piece_length=65536),
             "high-delay": case([256, 1536, 2560], delay=0.012),
         }
+    if suite == "recovery-development":
+        return {
+            "stable": case([256, 768, 1536, 1024]),
+            "recovery": case([1024, 768, 256], changes=[change(0.4, 2, 4096)]),
+            "switch": case([3072, 512, 1024], changes=[
+                change(0.4, 0, 256), change(0.4, 1, 3072)]),
+            "slow-peer": case([2048, 1536, 64]),
+            "equal": case([1024, 1024, 1024]),
+        }
+    if suite == "recovery-validation":
+        # New holdout for the recovery policy, fixed before its first run.
+        return {
+            "late-recovery": case([1408, 896, 224, 448], changes=[
+                change(0.85, 2, 3584)]),
+            "early-recovery": case([896, 640, 160], changes=[
+                change(0.2, 2, 2816)], piece_length=16384),
+            "repeated-changes": case([2304, 448, 768, 1280], changes=[
+                change(0.5, 0, 192), change(0.5, 1, 3072),
+                change(1.2, 1, 384), change(1.2, 0, 2816)]),
+            "stationary-wide": case([192, 576, 1280, 2304], piece_length=65536),
+            "stationary-equal": case([1152, 1152, 1152, 1152]),
+            "latency-heavy": case([384, 1280, 2304], delay=0.008, piece_length=16384),
+            "bad-fast-peer": case([2560, 768, 1280, 320], corrupt=0, piece_length=65536),
+            "slow-outlier": case([1920, 1280, 48, 768]),
+        }
     raise ValueError("unknown benchmark suite")
 
 
-def paired_comparisons(rows, names, *, bootstrap_seed=90210):
+def paired_comparisons(rows, names, *, baseline="heuristic", bootstrap_seed=90210):
     """Pair by scenario/trial, retaining failures instead of silently dropping them."""
     comparisons = []
     rng = random.Random(bootstrap_seed)
     scenarios = list(dict.fromkeys(row["scenario"] for row in rows))
     for scenario in scenarios:
-        lookup = {(row["trial"], row["policy"]): row["metrics"]
-                  for row in rows if row["scenario"] == scenario}
+        scenario_rows = [row for row in rows if row["scenario"] == scenario]
+        lookup = {(row["trial"], row["policy"]): row["metrics"] for row in scenario_rows}
+        if len(lookup) != len(scenario_rows):
+            raise ValueError("duplicate scenario/trial/policy row")
         trials = sorted({trial for trial, _ in lookup})
         for name in names:
-            if name == "heuristic":
+            if name == baseline:
                 continue
             ratios, overhead, waste, cpu = [], [], [], []
             failures = 0
+            missing = 0
             for trial in trials:
-                base, candidate = lookup.get((trial, "heuristic")), lookup.get((trial, name))
+                base, candidate = lookup.get((trial, baseline)), lookup.get((trial, name))
                 if base is None or candidate is None:
+                    missing += 1
                     continue
                 if not base["complete"] or not candidate["complete"]:
                     failures += 1
@@ -102,12 +135,14 @@ def paired_comparisons(rows, names, *, bootstrap_seed=90210):
                 means = sorted(statistics.mean(rng.choices(ratios, k=len(ratios))) for _ in range(2000))
                 interval = [means[49], means[1949]]
             comparisons.append(dict(
-                scenario=scenario, policy=name, baseline="heuristic",
-                paired_successes=len(ratios), pairs_with_failure=failures,
+                scenario=scenario, policy=name, baseline=baseline,
+                paired_successes=len(ratios), pairs_with_failure=failures, pairs_missing=missing,
                 mean_completion_speedup=statistics.mean(ratios) if ratios else None,
                 bootstrap_95_percent_interval=interval,
                 median_overhead_delta_bytes=statistics.median(overhead) if overhead else None,
+                max_overhead_delta_bytes=max(overhead) if overhead else None,
                 median_waste_delta_bytes=statistics.median(waste) if waste else None,
+                max_waste_delta_bytes=max(waste) if waste else None,
                 median_cpu_delta_seconds=statistics.median(cpu) if cpu else None,
             ))
     return comparisons
@@ -187,9 +222,11 @@ async def run_benchmark(*, trials=3, size=1024 * 1024, seed=2026, progress=None,
                 item[f"stdev_{key}"] = statistics.stdev(values) if len(values) > 1 else None
             summary.append(item)
     return dict(
-        schema_version=2, suite=suite, seed=seed, trials=trials, size_bytes=size,
+        schema_version=3, suite=suite, seed=seed, trials=trials, size_bytes=size,
         code_sha256=code_hash.hexdigest(), policies=list(policies),
         python=platform.python_version(), platform=platform.platform(),
         concurrency=2, pipeline=8, scenarios=scenarios,
         note="Local loopback with application-level rate/delay injection. Not public-swarm evidence. Bootstrap intervals are descriptive, per-scenario, not multiple-comparison corrected.",
-        summary=summary, comparisons=paired_comparisons(rows, policies), runs=rows)
+        summary=summary, comparisons=[comparison
+            for baseline in ("heuristic", "adaptive", "ewma-probe") if baseline in policies
+            for comparison in paired_comparisons(rows, policies, baseline=baseline)], runs=rows)

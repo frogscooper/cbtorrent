@@ -1,5 +1,8 @@
 # Adaptive service-time prediction
 
+Follow-up: [bounded peer revisits and change detection](RECOVERY_EXPERIMENT.md).
+The results below describe the original adaptive policy, retained unchanged.
+
 Status: development and separate validation complete. The candidate improves
 completion time in two held-out rate-change scenarios; it is essentially tied
 elsewhere and slightly slower in the recovering-peer scenario. The original

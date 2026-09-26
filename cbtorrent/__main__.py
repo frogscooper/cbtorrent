@@ -8,7 +8,7 @@ from .benchmark import run_benchmark
 from .client import DownloadError, download
 from .metainfo import Torrent, create
 from .metrics import Metrics
-from .policy import AdaptivePolicy, BanditPolicy, ThroughputPolicy
+from .policy import AdaptivePolicy, BanditPolicy, RecoveryPolicy, ThroughputPolicy
 from .seeder import FileSource, SeedServer
 from .tracker import announce
 
@@ -73,7 +73,7 @@ def build_parser():
     get.add_argument("--pipeline", type=int, default=8)
     get.add_argument("--concurrency", type=int, default=4)
     get.add_argument("--max-connections", type=int, default=16)
-    get.add_argument("--policy", choices=("heuristic", "bandit", "adaptive"), default="heuristic")
+    get.add_argument("--policy", choices=("heuristic", "bandit", "adaptive", "recovery"), default="heuristic")
     get.add_argument("--resume", action="store_true")
     get.add_argument("--no-trackers", action="store_true")
     get.add_argument("--listen-host", default="0.0.0.0")
@@ -98,7 +98,8 @@ def build_parser():
     bench.add_argument("--trials", type=int, default=3)
     bench.add_argument("--size-mib", type=float, default=1)
     bench.add_argument("--seed", type=int, default=2026)
-    bench.add_argument("--suite", choices=("baseline", "development", "validation"), default="baseline")
+    bench.add_argument("--suite", choices=("baseline", "development", "validation",
+                                         "recovery-development", "recovery-validation"), default="baseline")
     bench.add_argument("--policies", default="heuristic,bandit,adaptive")
     bench.add_argument("--report", type=Path)
     return parser
@@ -126,7 +127,7 @@ def main(argv=None):
             torrent = Torrent.load(args.torrent)
             args.output.parent.mkdir(parents=True, exist_ok=True)
             policy = {"heuristic": ThroughputPolicy, "bandit": BanditPolicy,
-                      "adaptive": AdaptivePolicy}[args.policy]()
+                      "adaptive": AdaptivePolicy, "recovery": RecoveryPolicy}[args.policy]()
             def progress(done, total):
                 print(f"{done}/{total} verified bytes", file=sys.stderr)
             report = asyncio.run(download(

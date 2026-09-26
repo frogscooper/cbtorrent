@@ -7,3 +7,4 @@ dist/
 downloads/
 *.part
 benchmarks/*-summary.json
+benchmarks/*-tests.log
