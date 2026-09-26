@@ -1,0 +1,1997 @@
+{
+  "schema_version": 1,
+  "seed": 2026,
+  "trials": 5,
+  "size_bytes": 1048576,
+  "python": "3.13.2",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "concurrency": 2,
+  "piece_length": 32768,
+  "pipeline": 8,
+  "scenarios": {
+    "mixed": [
+      {
+        "bytes_per_second": 262144,
+        "delay_per_block_seconds": 0.005,
+        "corrupt": false
+      },
+      {
+        "bytes_per_second": 2097152,
+        "delay_per_block_seconds": 0.001,
+        "corrupt": false
+      },
+      {
+        "bytes_per_second": 786432,
+        "delay_per_block_seconds": 0.002,
+        "corrupt": false
+      }
+    ],
+    "uniform": [
+      {
+        "bytes_per_second": 1048576,
+        "delay_per_block_seconds": 0.002,
+        "corrupt": false
+      },
+      {
+        "bytes_per_second": 1048576,
+        "delay_per_block_seconds": 0.002,
+        "corrupt": false
+      },
+      {
+        "bytes_per_second": 1048576,
+        "delay_per_block_seconds": 0.002,
+        "corrupt": false
+      }
+    ],
+    "corrupt-peer": [
+      {
+        "bytes_per_second": 2097152,
+        "delay_per_block_seconds": 0,
+        "corrupt": true
+      },
+      {
+        "bytes_per_second": 524288,
+        "delay_per_block_seconds": 0.002,
+        "corrupt": false
+      },
+      {
+        "bytes_per_second": 1048576,
+        "delay_per_block_seconds": 0.002,
+        "corrupt": false
+      }
+    ]
+  },
+  "note": "Local loopback trials with application-level rate/delay injection. Not public-swarm evidence.",
+  "summary": [
+    {
+      "scenario": "mixed",
+      "policy": "heuristic",
+      "successes": 5,
+      "trials": 5,
+      "median_completion_seconds": 0.730691000004299,
+      "stdev_completion_seconds": 0.002314004402197832,
+      "median_cpu_seconds": 0.0,
+      "stdev_cpu_seconds": 0.05590169943749474,
+      "median_protocol_overhead_bytes": 2673,
+      "stdev_protocol_overhead_bytes": 0.0,
+      "median_wasted_payload_bytes": 0,
+      "stdev_wasted_payload_bytes": 0.0,
+      "median_connections": 3,
+      "stdev_connections": 0.0,
+      "median_policy_seconds": 0.0001887003891170025,
+      "stdev_policy_seconds": 2.6030641767558146e-05
+    },
+    {
+      "scenario": "mixed",
+      "policy": "bandit",
+      "successes": 5,
+      "trials": 5,
+      "median_completion_seconds": 0.7923257999354973,
+      "stdev_completion_seconds": 0.021192130141495805,
+      "median_cpu_seconds": 0.015625,
+      "stdev_cpu_seconds": 0.11556163804437872,
+      "median_protocol_overhead_bytes": 2673,
+      "stdev_protocol_overhead_bytes": 0.0,
+      "median_wasted_payload_bytes": 0,
+      "stdev_wasted_payload_bytes": 0.0,
+      "median_connections": 3,
+      "stdev_connections": 0.0,
+      "median_policy_seconds": 0.00027939968276768923,
+      "stdev_policy_seconds": 4.192519456399578e-05
+    },
+    {
+      "scenario": "uniform",
+      "policy": "heuristic",
+      "successes": 5,
+      "trials": 5,
+      "median_completion_seconds": 0.9919985000742599,
+      "stdev_completion_seconds": 0.0027436977549989503,
+      "median_cpu_seconds": 0.015625,
+      "stdev_cpu_seconds": 0.05990715472712754,
+      "median_protocol_overhead_bytes": 2673,
+      "stdev_protocol_overhead_bytes": 0.0,
+      "median_wasted_payload_bytes": 0,
+      "stdev_wasted_payload_bytes": 0.0,
+      "median_connections": 3,
+      "stdev_connections": 0.0,
+      "median_policy_seconds": 0.00013680069241672754,
+      "stdev_policy_seconds": 9.535154946559856e-06
+    },
+    {
+      "scenario": "uniform",
+      "policy": "bandit",
+      "successes": 5,
+      "trials": 5,
+      "median_completion_seconds": 0.9931011999724433,
+      "stdev_completion_seconds": 0.0017115104944157306,
+      "median_cpu_seconds": 0.015625,
+      "stdev_cpu_seconds": 0.01711632992203644,
+      "median_protocol_overhead_bytes": 2673,
+      "stdev_protocol_overhead_bytes": 0.0,
+      "median_wasted_payload_bytes": 0,
+      "stdev_wasted_payload_bytes": 0.0,
+      "median_connections": 3,
+      "stdev_connections": 0.0,
+      "median_policy_seconds": 0.00022009958047419786,
+      "stdev_policy_seconds": 1.2527067407887547e-05
+    },
+    {
+      "scenario": "corrupt-peer",
+      "policy": "heuristic",
+      "successes": 5,
+      "trials": 5,
+      "median_completion_seconds": 1.2304914999986067,
+      "stdev_completion_seconds": 0.01787550271025634,
+      "median_cpu_seconds": 0.015625,
+      "stdev_cpu_seconds": 0.03240068961457456,
+      "median_protocol_overhead_bytes": 2733,
+      "stdev_protocol_overhead_bytes": 0.0,
+      "median_wasted_payload_bytes": 32768,
+      "stdev_wasted_payload_bytes": 0.0,
+      "median_connections": 3,
+      "stdev_connections": 0.0,
+      "median_policy_seconds": 0.00017959973774850368,
+      "stdev_policy_seconds": 1.0700660548026061e-05
+    },
+    {
+      "scenario": "corrupt-peer",
+      "policy": "bandit",
+      "successes": 5,
+      "trials": 5,
+      "median_completion_seconds": 1.227454200037755,
+      "stdev_completion_seconds": 0.006136408757704177,
+      "median_cpu_seconds": 0.015625,
+      "stdev_cpu_seconds": 0.03240068961457456,
+      "median_protocol_overhead_bytes": 2733,
+      "stdev_protocol_overhead_bytes": 0.0,
+      "median_wasted_payload_bytes": 32768,
+      "stdev_wasted_payload_bytes": 0.0,
+      "median_connections": 3,
+      "stdev_connections": 0.0,
+      "median_policy_seconds": 0.0003180998610332608,
+      "stdev_policy_seconds": 3.310278223906761e-05
+    }
+  ],
+  "runs": [
+    {
+      "scenario": "mixed",
+      "trial": 0,
+      "policy": "bandit",
+      "peer_order": [
+        1,
+        2,
+        0
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00025199970696121454,
+        "complete": true,
+        "elapsed_seconds": 0.816116200061515,
+        "cpu_seconds": 0.125,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.816116200061515,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:55837": {
+            "verified_bytes": 720896,
+            "seconds": 0.6838433999801055,
+            "failures": 0,
+            "samples": 22,
+            "reward_sum": 11.022121894592466,
+            "wire_bytes": 722569
+          },
+          "127.0.0.1:55838": {
+            "verified_bytes": 229376,
+            "seconds": 0.43582750007044524,
+            "failures": 0,
+            "samples": 7,
+            "reward_sum": 2.33601927049888,
+            "wire_bytes": 230014
+          },
+          "127.0.0.1:55839": {
+            "verified_bytes": 98304,
+            "seconds": 0.46490170003380626,
+            "failures": 0,
+            "samples": 3,
+            "reward_sum": 0.5012504080960265,
+            "wire_bytes": 98666
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "mixed",
+      "trial": 0,
+      "policy": "heuristic",
+      "peer_order": [
+        1,
+        2,
+        0
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00021690037101507187,
+        "complete": true,
+        "elapsed_seconds": 0.7282148998929188,
+        "cpu_seconds": 0.0,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.7282148998929188,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:55846": {
+            "verified_bytes": 720896,
+            "seconds": 0.6891983001260087,
+            "failures": 0,
+            "samples": 22,
+            "reward_sum": 10.983924745794987,
+            "wire_bytes": 722569
+          },
+          "127.0.0.1:55847": {
+            "verified_bytes": 294912,
+            "seconds": 0.5647056000307202,
+            "failures": 0,
+            "samples": 10,
+            "reward_sum": 2.989522140112794,
+            "wire_bytes": 295688
+          },
+          "127.0.0.1:55848": {
+            "verified_bytes": 32768,
+            "seconds": 0.15487899992149323,
+            "failures": 0,
+            "samples": 1,
+            "reward_sum": 0.16653640498452754,
+            "wire_bytes": 32992
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "mixed",
+      "trial": 1,
+      "policy": "bandit",
+      "peer_order": [
+        2,
+        0,
+        1
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.000256200204603374,
+        "complete": true,
+        "elapsed_seconds": 0.7745655999751762,
+        "cpu_seconds": 0.015625,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.7745655999751762,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:55853": {
+            "verified_bytes": 196608,
+            "seconds": 0.36536220007110387,
+            "failures": 0,
+            "samples": 6,
+            "reward_sum": 2.0322659572473567,
+            "wire_bytes": 197177
+          },
+          "127.0.0.1:55854": {
+            "verified_bytes": 98304,
+            "seconds": 0.457855400047265,
+            "failures": 0,
+            "samples": 3,
+            "reward_sum": 0.5077776236764718,
+            "wire_bytes": 98666
+          },
+          "127.0.0.1:55855": {
+            "verified_bytes": 753664,
+            "seconds": 0.7088324005017057,
+            "failures": 0,
+            "samples": 23,
+            "reward_sum": 11.56955788893494,
+            "wire_bytes": 755406
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "mixed",
+      "trial": 1,
+      "policy": "heuristic",
+      "peer_order": [
+        2,
+        0,
+        1
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00018880004063248634,
+        "complete": true,
+        "elapsed_seconds": 0.730691000004299,
+        "cpu_seconds": 0.0,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.730691000004299,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:55860": {
+            "verified_bytes": 327680,
+            "seconds": 0.630815000156872,
+            "failures": 0,
+            "samples": 10,
+            "reward_sum": 3.310339304200233,
+            "wire_bytes": 328525
+          },
+          "127.0.0.1:55861": {
+            "verified_bytes": 32768,
+            "seconds": 0.14870510005857795,
+            "failures": 0,
+            "samples": 1,
+            "reward_sum": 0.17229652324030892,
+            "wire_bytes": 32992
+          },
+          "127.0.0.1:55862": {
+            "verified_bytes": 688128,
+            "seconds": 0.6512798998737708,
+            "failures": 0,
+            "samples": 21,
+            "reward_sum": 10.53040750294613,
+            "wire_bytes": 689732
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "mixed",
+      "trial": 2,
+      "policy": "bandit",
+      "peer_order": [
+        2,
+        1,
+        0
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00027939968276768923,
+        "complete": true,
+        "elapsed_seconds": 0.8277802000520751,
+        "cpu_seconds": 0.0,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.8277802000520751,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:55867": {
+            "verified_bytes": 229376,
+            "seconds": 0.4438973000505939,
+            "failures": 0,
+            "samples": 7,
+            "reward_sum": 2.3086742707080075,
+            "wire_bytes": 230014
+          },
+          "127.0.0.1:55868": {
+            "verified_bytes": 720896,
+            "seconds": 0.6928340998711064,
+            "failures": 0,
+            "samples": 22,
+            "reward_sum": 10.953932618068896,
+            "wire_bytes": 722569
+          },
+          "127.0.0.1:55869": {
+            "verified_bytes": 98304,
+            "seconds": 0.46759180014487356,
+            "failures": 0,
+            "samples": 3,
+            "reward_sum": 0.4988339228523322,
+            "wire_bytes": 98666
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "mixed",
+      "trial": 2,
+      "policy": "heuristic",
+      "peer_order": [
+        2,
+        1,
+        0
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00014599994756281376,
+        "complete": true,
+        "elapsed_seconds": 0.7322150999680161,
+        "cpu_seconds": 0.0,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.7322150999680161,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:55874": {
+            "verified_bytes": 294912,
+            "seconds": 0.5678338998695835,
+            "failures": 0,
+            "samples": 10,
+            "reward_sum": 2.978533643629051,
+            "wire_bytes": 295688
+          },
+          "127.0.0.1:55875": {
+            "verified_bytes": 720896,
+            "seconds": 0.6930970998946577,
+            "failures": 0,
+            "samples": 22,
+            "reward_sum": 10.952675628466098,
+            "wire_bytes": 722569
+          },
+          "127.0.0.1:55876": {
+            "verified_bytes": 32768,
+            "seconds": 0.1557247000746429,
+            "failures": 0,
+            "samples": 1,
+            "reward_sum": 0.16577700682228919,
+            "wire_bytes": 32992
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "mixed",
+      "trial": 3,
+      "policy": "heuristic",
+      "peer_order": [
+        0,
+        2,
+        1
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.0001887003891170025,
+        "complete": true,
+        "elapsed_seconds": 0.7325994999846444,
+        "cpu_seconds": 0.0,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.7325994999846444,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:55881": {
+            "verified_bytes": 32768,
+            "seconds": 0.14834040007553995,
+            "failures": 0,
+            "samples": 1,
+            "reward_sum": 0.17264916885492762,
+            "wire_bytes": 32992
+          },
+          "127.0.0.1:55882": {
+            "verified_bytes": 327680,
+            "seconds": 0.629500399925746,
+            "failures": 0,
+            "samples": 10,
+            "reward_sum": 3.3143165980697615,
+            "wire_bytes": 328525
+          },
+          "127.0.0.1:55883": {
+            "verified_bytes": 688128,
+            "seconds": 0.6519470999483019,
+            "failures": 0,
+            "samples": 21,
+            "reward_sum": 10.524931643210543,
+            "wire_bytes": 689732
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "mixed",
+      "trial": 3,
+      "policy": "bandit",
+      "peer_order": [
+        0,
+        2,
+        1
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00034320016857236624,
+        "complete": true,
+        "elapsed_seconds": 0.7923257999354973,
+        "cpu_seconds": 0.0,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.7923257999354973,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:55889": {
+            "verified_bytes": 98304,
+            "seconds": 0.45783620001748204,
+            "failures": 0,
+            "samples": 3,
+            "reward_sum": 0.5079783921919645,
+            "wire_bytes": 98666
+          },
+          "127.0.0.1:55890": {
+            "verified_bytes": 196608,
+            "seconds": 0.381108499947004,
+            "failures": 0,
+            "samples": 6,
+            "reward_sum": 1.9761729813096953,
+            "wire_bytes": 197177
+          },
+          "127.0.0.1:55891": {
+            "verified_bytes": 753664,
+            "seconds": 0.7149863997474313,
+            "failures": 0,
+            "samples": 23,
+            "reward_sum": 11.519947014253326,
+            "wire_bytes": 755406
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "mixed",
+      "trial": 4,
+      "policy": "bandit",
+      "peer_order": [
+        1,
+        0,
+        2
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00032900029327720404,
+        "complete": true,
+        "elapsed_seconds": 0.7921941999811679,
+        "cpu_seconds": 0.265625,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.7921941999811679,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:55896": {
+            "verified_bytes": 753664,
+            "seconds": 0.7210085998522118,
+            "failures": 0,
+            "samples": 23,
+            "reward_sum": 11.479916210605733,
+            "wire_bytes": 755406
+          },
+          "127.0.0.1:55897": {
+            "verified_bytes": 98304,
+            "seconds": 0.4601296001346782,
+            "failures": 0,
+            "samples": 3,
+            "reward_sum": 0.5057311982579544,
+            "wire_bytes": 98666
+          },
+          "127.0.0.1:55898": {
+            "verified_bytes": 196608,
+            "seconds": 0.3723647000733763,
+            "failures": 0,
+            "samples": 6,
+            "reward_sum": 2.0059693808325822,
+            "wire_bytes": 197177
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "mixed",
+      "trial": 4,
+      "policy": "heuristic",
+      "peer_order": [
+        1,
+        0,
+        2
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.0001717002596706152,
+        "complete": true,
+        "elapsed_seconds": 0.7274748999625444,
+        "cpu_seconds": 0.125,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.7274748999625444,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:55903": {
+            "verified_bytes": 688128,
+            "seconds": 0.6561799996998161,
+            "failures": 0,
+            "samples": 21,
+            "reward_sum": 10.497239580041304,
+            "wire_bytes": 689732
+          },
+          "127.0.0.1:55904": {
+            "verified_bytes": 32768,
+            "seconds": 0.16272380005102605,
+            "failures": 0,
+            "samples": 1,
+            "reward_sum": 0.15974632661337906,
+            "wire_bytes": 32992
+          },
+          "127.0.0.1:55905": {
+            "verified_bytes": 327680,
+            "seconds": 0.6160879000090063,
+            "failures": 0,
+            "samples": 10,
+            "reward_sum": 3.360205462002083,
+            "wire_bytes": 328525
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "uniform",
+      "trial": 0,
+      "policy": "bandit",
+      "peer_order": [
+        2,
+        1,
+        0
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00019909976981580257,
+        "complete": true,
+        "elapsed_seconds": 0.9945837999694049,
+        "cpu_seconds": 0.0,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.9945837999694049,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:55910": {
+            "verified_bytes": 360448,
+            "seconds": 0.6750425000209361,
+            "failures": 0,
+            "samples": 11,
+            "reward_sum": 3.70807553173505,
+            "wire_bytes": 361362
+          },
+          "127.0.0.1:55911": {
+            "verified_bytes": 360448,
+            "seconds": 0.675928299780935,
+            "failures": 0,
+            "samples": 11,
+            "reward_sum": 3.7049728974171003,
+            "wire_bytes": 361362
+          },
+          "127.0.0.1:55912": {
+            "verified_bytes": 327680,
+            "seconds": 0.618427199893631,
+            "failures": 0,
+            "samples": 10,
+            "reward_sum": 3.351782621273943,
+            "wire_bytes": 328525
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "uniform",
+      "trial": 0,
+      "policy": "heuristic",
+      "peer_order": [
+        2,
+        1,
+        0
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00014999997802078724,
+        "complete": true,
+        "elapsed_seconds": 0.9964722000295296,
+        "cpu_seconds": 0.015625,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.9964722000295296,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:55918": {
+            "verified_bytes": 491520,
+            "seconds": 0.9233266999945045,
+            "failures": 0,
+            "samples": 15,
+            "reward_sum": 5.045113545476308,
+            "wire_bytes": 492710
+          },
+          "127.0.0.1:55919": {
+            "verified_bytes": 524288,
+            "seconds": 0.9860131999012083,
+            "failures": 0,
+            "samples": 16,
+            "reward_sum": 5.377425663264293,
+            "wire_bytes": 525547
+          },
+          "127.0.0.1:55920": {
+            "verified_bytes": 32768,
+            "seconds": 0.06222189997788519,
+            "failures": 0,
+            "samples": 1,
+            "reward_sum": 0.33296717036896023,
+            "wire_bytes": 32992
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "uniform",
+      "trial": 1,
+      "policy": "bandit",
+      "peer_order": [
+        2,
+        0,
+        1
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00021359999664127827,
+        "complete": true,
+        "elapsed_seconds": 0.9901176999555901,
+        "cpu_seconds": 0.046875,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.9901176999555901,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:55926": {
+            "verified_bytes": 360448,
+            "seconds": 0.6727281000930816,
+            "failures": 0,
+            "samples": 11,
+            "reward_sum": 3.716253912430141,
+            "wire_bytes": 361362
+          },
+          "127.0.0.1:55927": {
+            "verified_bytes": 360448,
+            "seconds": 0.6728594000451267,
+            "failures": 0,
+            "samples": 11,
+            "reward_sum": 3.7157937748115804,
+            "wire_bytes": 361362
+          },
+          "127.0.0.1:55928": {
+            "verified_bytes": 327680,
+            "seconds": 0.6155933000845835,
+            "failures": 0,
+            "samples": 10,
+            "reward_sum": 3.3620581236369533,
+            "wire_bytes": 328525
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "uniform",
+      "trial": 1,
+      "policy": "heuristic",
+      "peer_order": [
+        2,
+        0,
+        1
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00012499990407377481,
+        "complete": true,
+        "elapsed_seconds": 0.9919985000742599,
+        "cpu_seconds": 0.015625,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.9919985000742599,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:55933": {
+            "verified_bytes": 491520,
+            "seconds": 0.9200683000963181,
+            "failures": 0,
+            "samples": 15,
+            "reward_sum": 5.057946152665973,
+            "wire_bytes": 492710
+          },
+          "127.0.0.1:55934": {
+            "verified_bytes": 524288,
+            "seconds": 0.9824686000356451,
+            "failures": 0,
+            "samples": 16,
+            "reward_sum": 5.391248689283971,
+            "wire_bytes": 525547
+          },
+          "127.0.0.1:55935": {
+            "verified_bytes": 32768,
+            "seconds": 0.06184870004653931,
+            "failures": 0,
+            "samples": 1,
+            "reward_sum": 0.33430736196231897,
+            "wire_bytes": 32992
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "uniform",
+      "trial": 2,
+      "policy": "bandit",
+      "peer_order": [
+        0,
+        2,
+        1
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00022009958047419786,
+        "complete": true,
+        "elapsed_seconds": 0.9926852999487892,
+        "cpu_seconds": 0.015625,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.9926852999487892,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:55942": {
+            "verified_bytes": 360448,
+            "seconds": 0.6735977999633178,
+            "failures": 0,
+            "samples": 11,
+            "reward_sum": 3.7125314504963223,
+            "wire_bytes": 361362
+          },
+          "127.0.0.1:55943": {
+            "verified_bytes": 360448,
+            "seconds": 0.6740211999276653,
+            "failures": 0,
+            "samples": 11,
+            "reward_sum": 3.7110578781620607,
+            "wire_bytes": 361362
+          },
+          "127.0.0.1:55944": {
+            "verified_bytes": 327680,
+            "seconds": 0.6189091000705957,
+            "failures": 0,
+            "samples": 10,
+            "reward_sum": 3.350041532496655,
+            "wire_bytes": 328525
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "uniform",
+      "trial": 2,
+      "policy": "heuristic",
+      "peer_order": [
+        0,
+        2,
+        1
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00014420016668736935,
+        "complete": true,
+        "elapsed_seconds": 0.9961092000594363,
+        "cpu_seconds": 0.125,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.9961092000594363,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:55949": {
+            "verified_bytes": 491520,
+            "seconds": 0.921792600187473,
+            "failures": 0,
+            "samples": 15,
+            "reward_sum": 5.051071737734963,
+            "wire_bytes": 492710
+          },
+          "127.0.0.1:55950": {
+            "verified_bytes": 491520,
+            "seconds": 0.922847599722445,
+            "failures": 0,
+            "samples": 15,
+            "reward_sum": 5.047197880570454,
+            "wire_bytes": 492710
+          },
+          "127.0.0.1:55951": {
+            "verified_bytes": 65536,
+            "seconds": 0.12367529992479831,
+            "failures": 0,
+            "samples": 2,
+            "reward_sum": 0.6696512750188781,
+            "wire_bytes": 65829
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "uniform",
+      "trial": 3,
+      "policy": "heuristic",
+      "peer_order": [
+        2,
+        0,
+        1
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00013680069241672754,
+        "complete": true,
+        "elapsed_seconds": 0.9913596999831498,
+        "cpu_seconds": 0.015625,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.9913596999831498,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:55956": {
+            "verified_bytes": 491520,
+            "seconds": 0.9183056997135282,
+            "failures": 0,
+            "samples": 15,
+            "reward_sum": 5.066579137615301,
+            "wire_bytes": 492710
+          },
+          "127.0.0.1:55957": {
+            "verified_bytes": 524288,
+            "seconds": 0.9810905002523214,
+            "failures": 0,
+            "samples": 16,
+            "reward_sum": 5.398522783307145,
+            "wire_bytes": 525547
+          },
+          "127.0.0.1:55958": {
+            "verified_bytes": 32768,
+            "seconds": 0.062306600040756166,
+            "failures": 0,
+            "samples": 1,
+            "reward_sum": 0.33266449418271316,
+            "wire_bytes": 32992
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "uniform",
+      "trial": 3,
+      "policy": "bandit",
+      "peer_order": [
+        2,
+        0,
+        1
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00022450031246989965,
+        "complete": true,
+        "elapsed_seconds": 0.9931011999724433,
+        "cpu_seconds": 0.015625,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.9931011999724433,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:55963": {
+            "verified_bytes": 360448,
+            "seconds": 0.6740764998830855,
+            "failures": 0,
+            "samples": 11,
+            "reward_sum": 3.710804087636814,
+            "wire_bytes": 361362
+          },
+          "127.0.0.1:55964": {
+            "verified_bytes": 360448,
+            "seconds": 0.6748345998348668,
+            "failures": 0,
+            "samples": 11,
+            "reward_sum": 3.7081812654706847,
+            "wire_bytes": 361362
+          },
+          "127.0.0.1:55965": {
+            "verified_bytes": 327680,
+            "seconds": 0.6176493001403287,
+            "failures": 0,
+            "samples": 10,
+            "reward_sum": 3.354659269079625,
+            "wire_bytes": 328525
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "uniform",
+      "trial": 4,
+      "policy": "bandit",
+      "peer_order": [
+        1,
+        2,
+        0
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00023230037186294794,
+        "complete": true,
+        "elapsed_seconds": 0.9939273999771103,
+        "cpu_seconds": 0.015625,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.9939273999771103,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:55971": {
+            "verified_bytes": 360448,
+            "seconds": 0.6750226999865845,
+            "failures": 0,
+            "samples": 11,
+            "reward_sum": 3.707394554277303,
+            "wire_bytes": 361362
+          },
+          "127.0.0.1:55972": {
+            "verified_bytes": 360448,
+            "seconds": 0.6720611001364887,
+            "failures": 0,
+            "samples": 11,
+            "reward_sum": 3.7182161854539206,
+            "wire_bytes": 361362
+          },
+          "127.0.0.1:55973": {
+            "verified_bytes": 327680,
+            "seconds": 0.6175286000361666,
+            "failures": 0,
+            "samples": 10,
+            "reward_sum": 3.355034576763524,
+            "wire_bytes": 328525
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "uniform",
+      "trial": 4,
+      "policy": "heuristic",
+      "peer_order": [
+        1,
+        2,
+        0
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1595,
+        "wire_received_bytes": 1049654,
+        "payload_received_bytes": 1048576,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 0,
+        "hash_failures": 0,
+        "policy_seconds": 0.00013469962868839502,
+        "complete": true,
+        "elapsed_seconds": 0.9907109999330714,
+        "cpu_seconds": 0.125,
+        "protocol_overhead_bytes": 2673,
+        "wasted_payload_bytes": 0,
+        "completion_seconds": 0.9907109999330714,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:55978": {
+            "verified_bytes": 491520,
+            "seconds": 0.9190885998541489,
+            "failures": 0,
+            "samples": 15,
+            "reward_sum": 5.061853708132779,
+            "wire_bytes": 492710
+          },
+          "127.0.0.1:55979": {
+            "verified_bytes": 524288,
+            "seconds": 0.9814809000818059,
+            "failures": 0,
+            "samples": 16,
+            "reward_sum": 5.395217147852658,
+            "wire_bytes": 525547
+          },
+          "127.0.0.1:55980": {
+            "verified_bytes": 32768,
+            "seconds": 0.06190470000728965,
+            "failures": 0,
+            "samples": 1,
+            "reward_sum": 0.3341055767408466,
+            "wire_bytes": 32992
+          }
+        },
+        "peer_errors": [],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "corrupt-peer",
+      "trial": 0,
+      "policy": "heuristic",
+      "peer_order": [
+        2,
+        1,
+        0
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1629,
+        "wire_received_bytes": 1082448,
+        "payload_received_bytes": 1081344,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 1,
+        "hash_failures": 1,
+        "policy_seconds": 0.00016539962962269783,
+        "complete": true,
+        "elapsed_seconds": 1.2132239000638947,
+        "cpu_seconds": 0.015625,
+        "protocol_overhead_bytes": 2733,
+        "wasted_payload_bytes": 32768,
+        "completion_seconds": 1.2132239000638947,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:55985": {
+            "verified_bytes": 622592,
+            "seconds": 1.172506400034763,
+            "failures": 0,
+            "samples": 19,
+            "reward_sum": 6.380429175071741,
+            "wire_bytes": 624058
+          },
+          "127.0.0.1:55986": {
+            "verified_bytes": 425984,
+            "seconds": 1.2037702999077737,
+            "failures": 0,
+            "samples": 13,
+            "reward_sum": 3.2747023818486536,
+            "wire_bytes": 427036
+          },
+          "127.0.0.1:55987": {
+            "verified_bytes": 0,
+            "seconds": 0.03183389990590513,
+            "failures": 1,
+            "samples": 1,
+            "reward_sum": 0.0,
+            "wire_bytes": 32983
+          }
+        },
+        "peer_errors": [
+          "127.0.0.1:55987: piece hash mismatch"
+        ],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "corrupt-peer",
+      "trial": 0,
+      "policy": "bandit",
+      "peer_order": [
+        2,
+        1,
+        0
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1629,
+        "wire_received_bytes": 1082448,
+        "payload_received_bytes": 1081344,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 1,
+        "hash_failures": 1,
+        "policy_seconds": 0.0002636004937812686,
+        "complete": true,
+        "elapsed_seconds": 1.2157083000056446,
+        "cpu_seconds": 0.015625,
+        "protocol_overhead_bytes": 2733,
+        "wasted_payload_bytes": 32768,
+        "completion_seconds": 1.2157083000056446,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:55995": {
+            "verified_bytes": 622592,
+            "seconds": 1.176061699865386,
+            "failures": 0,
+            "samples": 19,
+            "reward_sum": 6.367538152981746,
+            "wire_bytes": 624058
+          },
+          "127.0.0.1:55996": {
+            "verified_bytes": 425984,
+            "seconds": 1.207125800079666,
+            "failures": 0,
+            "samples": 13,
+            "reward_sum": 3.2679356213238258,
+            "wire_bytes": 427036
+          },
+          "127.0.0.1:55997": {
+            "verified_bytes": 0,
+            "seconds": 0.031386999995447695,
+            "failures": 1,
+            "samples": 1,
+            "reward_sum": 0.0,
+            "wire_bytes": 32983
+          }
+        },
+        "peer_errors": [
+          "127.0.0.1:55997: piece hash mismatch"
+        ],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "corrupt-peer",
+      "trial": 1,
+      "policy": "bandit",
+      "peer_order": [
+        1,
+        0,
+        2
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1629,
+        "wire_received_bytes": 1082448,
+        "payload_received_bytes": 1081344,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 1,
+        "hash_failures": 1,
+        "policy_seconds": 0.0003204997628927231,
+        "complete": true,
+        "elapsed_seconds": 1.2311975000193343,
+        "cpu_seconds": 0.0,
+        "protocol_overhead_bytes": 2733,
+        "wasted_payload_bytes": 32768,
+        "completion_seconds": 1.2311975000193343,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:56002": {
+            "verified_bytes": 425984,
+            "seconds": 1.2097020001383498,
+            "failures": 0,
+            "samples": 13,
+            "reward_sum": 3.262327256064614,
+            "wire_bytes": 427036
+          },
+          "127.0.0.1:56003": {
+            "verified_bytes": 0,
+            "seconds": 0.040657600038684905,
+            "failures": 1,
+            "samples": 1,
+            "reward_sum": 0.0,
+            "wire_bytes": 32983
+          },
+          "127.0.0.1:56004": {
+            "verified_bytes": 622592,
+            "seconds": 1.1833760999143124,
+            "failures": 0,
+            "samples": 19,
+            "reward_sum": 6.339196129102781,
+            "wire_bytes": 624058
+          }
+        },
+        "peer_errors": [
+          "127.0.0.1:56003: piece hash mismatch"
+        ],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "corrupt-peer",
+      "trial": 1,
+      "policy": "heuristic",
+      "peer_order": [
+        1,
+        0,
+        2
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1629,
+        "wire_received_bytes": 1082448,
+        "payload_received_bytes": 1081344,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 1,
+        "hash_failures": 1,
+        "policy_seconds": 0.00017959973774850368,
+        "complete": true,
+        "elapsed_seconds": 1.2304914999986067,
+        "cpu_seconds": 0.0,
+        "protocol_overhead_bytes": 2733,
+        "wasted_payload_bytes": 32768,
+        "completion_seconds": 1.2304914999986067,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:56012": {
+            "verified_bytes": 425984,
+            "seconds": 1.2084723997395486,
+            "failures": 0,
+            "samples": 13,
+            "reward_sum": 3.2648078829958895,
+            "wire_bytes": 427036
+          },
+          "127.0.0.1:56013": {
+            "verified_bytes": 0,
+            "seconds": 0.04045219998806715,
+            "failures": 1,
+            "samples": 1,
+            "reward_sum": 0.0,
+            "wire_bytes": 32983
+          },
+          "127.0.0.1:56014": {
+            "verified_bytes": 622592,
+            "seconds": 1.1825222996994853,
+            "failures": 0,
+            "samples": 19,
+            "reward_sum": 6.342253012636605,
+            "wire_bytes": 624058
+          }
+        },
+        "peer_errors": [
+          "127.0.0.1:56013: piece hash mismatch"
+        ],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "corrupt-peer",
+      "trial": 2,
+      "policy": "heuristic",
+      "peer_order": [
+        0,
+        1,
+        2
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1629,
+        "wire_received_bytes": 1082448,
+        "payload_received_bytes": 1081344,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 1,
+        "hash_failures": 1,
+        "policy_seconds": 0.00018250010907649994,
+        "complete": true,
+        "elapsed_seconds": 1.2316896000411361,
+        "cpu_seconds": 0.0,
+        "protocol_overhead_bytes": 2733,
+        "wasted_payload_bytes": 32768,
+        "completion_seconds": 1.2316896000411361,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:56019": {
+            "verified_bytes": 0,
+            "seconds": 0.03991109994240105,
+            "failures": 1,
+            "samples": 1,
+            "reward_sum": 0.0,
+            "wire_bytes": 32983
+          },
+          "127.0.0.1:56020": {
+            "verified_bytes": 425984,
+            "seconds": 1.2096636998467147,
+            "failures": 0,
+            "samples": 13,
+            "reward_sum": 3.2626807583607422,
+            "wire_bytes": 427036
+          },
+          "127.0.0.1:56021": {
+            "verified_bytes": 622592,
+            "seconds": 1.184580800239928,
+            "failures": 0,
+            "samples": 19,
+            "reward_sum": 6.334906913998765,
+            "wire_bytes": 624058
+          }
+        },
+        "peer_errors": [
+          "127.0.0.1:56019: piece hash mismatch"
+        ],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "corrupt-peer",
+      "trial": 2,
+      "policy": "bandit",
+      "peer_order": [
+        0,
+        1,
+        2
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1629,
+        "wire_received_bytes": 1082448,
+        "payload_received_bytes": 1081344,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 1,
+        "hash_failures": 1,
+        "policy_seconds": 0.0003180998610332608,
+        "complete": true,
+        "elapsed_seconds": 1.227454200037755,
+        "cpu_seconds": 0.078125,
+        "protocol_overhead_bytes": 2733,
+        "wasted_payload_bytes": 32768,
+        "completion_seconds": 1.227454200037755,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:56027": {
+            "verified_bytes": 0,
+            "seconds": 0.040612899931147695,
+            "failures": 1,
+            "samples": 1,
+            "reward_sum": 0.0,
+            "wire_bytes": 32983
+          },
+          "127.0.0.1:56028": {
+            "verified_bytes": 425984,
+            "seconds": 1.205335799837485,
+            "failures": 0,
+            "samples": 13,
+            "reward_sum": 3.271152585624817,
+            "wire_bytes": 427036
+          },
+          "127.0.0.1:56029": {
+            "verified_bytes": 622592,
+            "seconds": 1.1797655000118539,
+            "failures": 0,
+            "samples": 19,
+            "reward_sum": 6.352141356579962,
+            "wire_bytes": 624058
+          }
+        },
+        "peer_errors": [
+          "127.0.0.1:56027: piece hash mismatch"
+        ],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "corrupt-peer",
+      "trial": 3,
+      "policy": "heuristic",
+      "peer_order": [
+        0,
+        2,
+        1
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1629,
+        "wire_received_bytes": 1082448,
+        "payload_received_bytes": 1081344,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 1,
+        "hash_failures": 1,
+        "policy_seconds": 0.00016349926590919495,
+        "complete": true,
+        "elapsed_seconds": 1.2625644999789074,
+        "cpu_seconds": 0.078125,
+        "protocol_overhead_bytes": 2733,
+        "wasted_payload_bytes": 32768,
+        "completion_seconds": 1.2625644999789074,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:56034": {
+            "verified_bytes": 0,
+            "seconds": 0.039285700069740415,
+            "failures": 1,
+            "samples": 1,
+            "reward_sum": 0.0,
+            "wire_bytes": 32983
+          },
+          "127.0.0.1:56035": {
+            "verified_bytes": 622592,
+            "seconds": 1.1750201999675483,
+            "failures": 0,
+            "samples": 19,
+            "reward_sum": 6.371131223544373,
+            "wire_bytes": 624058
+          },
+          "127.0.0.1:56036": {
+            "verified_bytes": 425984,
+            "seconds": 1.2145643001422286,
+            "failures": 0,
+            "samples": 13,
+            "reward_sum": 3.2520573311596355,
+            "wire_bytes": 427036
+          }
+        },
+        "peer_errors": [
+          "127.0.0.1:56034: piece hash mismatch"
+        ],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "corrupt-peer",
+      "trial": 3,
+      "policy": "bandit",
+      "peer_order": [
+        0,
+        2,
+        1
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1629,
+        "wire_received_bytes": 1082448,
+        "payload_received_bytes": 1081344,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 1,
+        "hash_failures": 1,
+        "policy_seconds": 0.00029240024741739035,
+        "complete": true,
+        "elapsed_seconds": 1.2298583999508992,
+        "cpu_seconds": 0.0,
+        "protocol_overhead_bytes": 2733,
+        "wasted_payload_bytes": 32768,
+        "completion_seconds": 1.2298583999508992,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:56042": {
+            "verified_bytes": 0,
+            "seconds": 0.03866870002821088,
+            "failures": 1,
+            "samples": 1,
+            "reward_sum": 0.0,
+            "wire_bytes": 32983
+          },
+          "127.0.0.1:56043": {
+            "verified_bytes": 655360,
+            "seconds": 1.220645200344734,
+            "failures": 0,
+            "samples": 20,
+            "reward_sum": 6.784848956341331,
+            "wire_bytes": 656895
+          },
+          "127.0.0.1:56045": {
+            "verified_bytes": 393216,
+            "seconds": 1.1217058999463916,
+            "failures": 0,
+            "samples": 13,
+            "reward_sum": 3.0006854695865703,
+            "wire_bytes": 394199
+          }
+        },
+        "peer_errors": [
+          "127.0.0.1:56042: piece hash mismatch"
+        ],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "corrupt-peer",
+      "trial": 4,
+      "policy": "heuristic",
+      "peer_order": [
+        0,
+        1,
+        2
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1629,
+        "wire_received_bytes": 1082448,
+        "payload_received_bytes": 1081344,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 1,
+        "hash_failures": 1,
+        "policy_seconds": 0.00018760014791041613,
+        "complete": true,
+        "elapsed_seconds": 1.2303270999109372,
+        "cpu_seconds": 0.015625,
+        "protocol_overhead_bytes": 2733,
+        "wasted_payload_bytes": 32768,
+        "completion_seconds": 1.2303270999109372,
+        "policy": "ThroughputPolicy",
+        "peer_observations": {
+          "127.0.0.1:56050": {
+            "verified_bytes": 0,
+            "seconds": 0.03837009996641427,
+            "failures": 1,
+            "samples": 1,
+            "reward_sum": 0.0,
+            "wire_bytes": 32983
+          },
+          "127.0.0.1:56051": {
+            "verified_bytes": 425984,
+            "seconds": 1.204959300113842,
+            "failures": 0,
+            "samples": 13,
+            "reward_sum": 3.2726900540201513,
+            "wire_bytes": 427036
+          },
+          "127.0.0.1:56052": {
+            "verified_bytes": 622592,
+            "seconds": 1.1815315996063873,
+            "failures": 0,
+            "samples": 19,
+            "reward_sum": 6.345840820457286,
+            "wire_bytes": 624058
+          }
+        },
+        "peer_errors": [
+          "127.0.0.1:56050: piece hash mismatch"
+        ],
+        "tracker_errors": []
+      }
+    },
+    {
+      "scenario": "corrupt-peer",
+      "trial": 4,
+      "policy": "bandit",
+      "peer_order": [
+        0,
+        1,
+        2
+      ],
+      "metrics": {
+        "wire_sent_bytes": 1629,
+        "wire_received_bytes": 1082448,
+        "payload_received_bytes": 1081344,
+        "verified_bytes": 1048576,
+        "resumed_bytes": 0,
+        "uploaded_bytes": 0,
+        "tracker_response_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "connections": 3,
+        "peer_failures": 1,
+        "hash_failures": 1,
+        "policy_seconds": 0.0003518001176416874,
+        "complete": true,
+        "elapsed_seconds": 1.2269892999902368,
+        "cpu_seconds": 0.015625,
+        "protocol_overhead_bytes": 2733,
+        "wasted_payload_bytes": 32768,
+        "completion_seconds": 1.2269892999902368,
+        "policy": "BanditPolicy",
+        "peer_observations": {
+          "127.0.0.1:56059": {
+            "verified_bytes": 0,
+            "seconds": 0.03809619997628033,
+            "failures": 1,
+            "samples": 1,
+            "reward_sum": 0.0,
+            "wire_bytes": 32983
+          },
+          "127.0.0.1:56060": {
+            "verified_bytes": 425984,
+            "seconds": 1.2044874998973683,
+            "failures": 0,
+            "samples": 13,
+            "reward_sum": 3.273564711334947,
+            "wire_bytes": 427036
+          },
+          "127.0.0.1:56061": {
+            "verified_bytes": 622592,
+            "seconds": 1.181152799865231,
+            "failures": 0,
+            "samples": 19,
+            "reward_sum": 6.347181585463335,
+            "wire_bytes": 624058
+          }
+        },
+        "peer_errors": [
+          "127.0.0.1:56059: piece hash mismatch"
+        ],
+        "tracker_errors": []
+      }
+    }
+  ]
+}
