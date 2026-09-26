@@ -8,7 +8,7 @@ from unittest.mock import patch
 from cbtorrent.client import DownloadError, download
 from cbtorrent.metainfo import Torrent, create
 from cbtorrent.metrics import Metrics
-from cbtorrent.policy import BanditPolicy, Observation
+from cbtorrent.policy import AdaptivePolicy, BanditPolicy, Observation
 from cbtorrent.seeder import FileSource, SeedServer
 from cbtorrent.storage import Storage
 from cbtorrent.wire import Peer, message
@@ -111,6 +111,23 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.output.read_bytes(), self.data)
         self.assertEqual(report["policy"], "BanditPolicy")
         self.assertGreater(sum(o["samples"] for o in report["peer_observations"].values()), 0)
+
+    async def test_adaptive_transfer_trains_on_verified_data(self):
+        peers = [await self.seed(latency=0.005), await self.seed()]
+        policy = AdaptivePolicy()
+        report = await download(self.torrent, peers, self.output, policy=policy)
+        self.assertEqual(self.output.read_bytes(), self.data)
+        self.assertEqual(report["policy"], "AdaptivePolicy")
+        self.assertEqual(sum(m.samples for m in policy.models.values()), len(self.torrent.hashes))
+        self.assertEqual(report["wasted_payload_bytes"], 0)
+
+    async def test_adaptive_does_not_train_on_failed_disk_commit(self):
+        peer = await self.seed()
+        policy = AdaptivePolicy()
+        with patch.object(Storage, "write", side_effect=OSError("disk full")):
+            with self.assertRaises(DownloadError):
+                await download(self.torrent, [peer], self.output, policy=policy)
+        self.assertEqual(policy.models, {})
 
     async def test_seed_rejects_file_with_wrong_content(self):
         self.original.write_bytes(b"X" * len(self.data))

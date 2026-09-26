@@ -8,7 +8,7 @@ from pathlib import Path
 from time import perf_counter
 
 from .metrics import Metrics
-from .policy import Observation, ThroughputPolicy
+from .policy import ActiveTransfer, Observation, SchedulingContext, ThroughputPolicy
 from .seeder import SeedServer
 from .storage import Storage
 from .tracker import announce
@@ -49,6 +49,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
     metrics.start()
     policy = policy or ThroughputPolicy()
     observations, sessions, tasks = {}, {}, {}
+    active = {}
     retired, claimed = set(), set()
     peer_errors, tracker_errors = [], []
     peer_id = b"-CB0002-" + os.urandom(12)
@@ -112,6 +113,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         index = None
         useful_bytes = 0
         failed = False
+        transfer_seconds = None
         try:
             async with asyncio.timeout(piece_timeout):
                 if peer is None:
@@ -131,7 +133,14 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                     await peer.receive()
                 index = min(useful, key=lambda i: (sum(i in p.available for p in sessions.values()), i))
                 claimed.add(index)
-                data = await peer.download_piece(index, pipeline)
+                transfer_started = perf_counter()
+                state = ActiveTransfer(index, torrent.piece_size(index), 0, transfer_started)
+                active[address] = state
+                def on_block(received):
+                    state.received = received
+                    state.last_progress = perf_counter()
+                data = await peer.download_piece(index, pipeline, on_block=on_block)
+                transfer_seconds = perf_counter() - transfer_started
                 if sha1(data).digest() != torrent.hashes[index]:
                     metrics.hash_failures += 1
                     raise ValueError("piece hash mismatch")
@@ -154,6 +163,11 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 claimed.discard(index)
             wire_bytes = (peer.sent_bytes + peer.received_bytes - before) if peer else 0
             observation.record(useful_bytes, perf_counter() - started, wire_bytes, failed)
+            active.pop(address, None)
+            if useful_bytes and transfer_seconds is not None and hasattr(policy, "observe"):
+                update_started = perf_counter()
+                policy.observe(address, useful_bytes, transfer_seconds)
+                metrics.policy_update_seconds += perf_counter() - update_started
 
     try:
         storage = Storage(torrent, output, resume=resume)
@@ -167,6 +181,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
             tracker_task = asyncio.create_task(refresh_trackers())
         while remaining:
             busy = set(tasks.values())
+            deferred = False
             while len(tasks) < concurrency and remaining - claimed:
                 candidates = [p for p in peers if p not in retired and p not in busy]
                 if not candidates:
@@ -176,8 +191,23 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 if useful_candidates:
                     candidates = useful_candidates
                 started = perf_counter()
-                address = policy.choose(candidates, observations)
+                if hasattr(policy, "choose_with_context"):
+                    unscheduled = remaining - claimed
+                    # Tail planning needs at most concurrency piece sizes, not a
+                    # full copied bitfield/dictionary for every scheduling decision.
+                    tail = unscheduled if len(unscheduled) <= concurrency else set()
+                    context = SchedulingContext(
+                        perf_counter(), len(unscheduled), {i: torrent.piece_size(i) for i in tail},
+                        {p: frozenset(session.available & tail) for p, session in sessions.items()},
+                        active.copy(), concurrency)
+                    address = policy.choose_with_context(candidates, observations, context)
+                else:
+                    address = policy.choose(candidates, observations)
                 metrics.policy_seconds += perf_counter() - started
+                if address is None and tasks:
+                    metrics.policy_deferrals += 1
+                    deferred = True
+                    break
                 if address not in candidates:
                     raise ValueError("policy selected an ineligible peer")
                 connecting = sum(p not in sessions for p in busy)
@@ -191,7 +221,8 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 busy.add(address)
             if not tasks:
                 raise ConnectionError("no usable peers remain; partial download can be resumed")
-            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED,
+                                         timeout=0.05 if deferred else None)
             for task in done:
                 del tasks[task]
                 task.result()

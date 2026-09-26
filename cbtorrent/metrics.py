@@ -17,6 +17,8 @@ class Metrics:
     peer_failures: int = 0
     hash_failures: int = 0
     policy_seconds: float = 0.0
+    policy_update_seconds: float = 0.0
+    policy_deferrals: int = 0
 
     def start(self):
         self._started = perf_counter()

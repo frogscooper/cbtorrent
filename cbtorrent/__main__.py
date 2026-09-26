@@ -8,7 +8,7 @@ from .benchmark import run_benchmark
 from .client import DownloadError, download
 from .metainfo import Torrent, create
 from .metrics import Metrics
-from .policy import BanditPolicy, ThroughputPolicy
+from .policy import AdaptivePolicy, BanditPolicy, ThroughputPolicy
 from .seeder import FileSource, SeedServer
 from .tracker import announce
 
@@ -73,7 +73,7 @@ def build_parser():
     get.add_argument("--pipeline", type=int, default=8)
     get.add_argument("--concurrency", type=int, default=4)
     get.add_argument("--max-connections", type=int, default=16)
-    get.add_argument("--policy", choices=("heuristic", "bandit"), default="heuristic")
+    get.add_argument("--policy", choices=("heuristic", "bandit", "adaptive"), default="heuristic")
     get.add_argument("--resume", action="store_true")
     get.add_argument("--no-trackers", action="store_true")
     get.add_argument("--listen-host", default="0.0.0.0")
@@ -98,6 +98,8 @@ def build_parser():
     bench.add_argument("--trials", type=int, default=3)
     bench.add_argument("--size-mib", type=float, default=1)
     bench.add_argument("--seed", type=int, default=2026)
+    bench.add_argument("--suite", choices=("baseline", "development", "validation"), default="baseline")
+    bench.add_argument("--policies", default="heuristic,bandit,adaptive")
     bench.add_argument("--report", type=Path)
     return parser
 
@@ -123,7 +125,8 @@ def main(argv=None):
         if args.command == "download":
             torrent = Torrent.load(args.torrent)
             args.output.parent.mkdir(parents=True, exist_ok=True)
-            policy = BanditPolicy() if args.policy == "bandit" else ThroughputPolicy()
+            policy = {"heuristic": ThroughputPolicy, "bandit": BanditPolicy,
+                      "adaptive": AdaptivePolicy}[args.policy]()
             def progress(done, total):
                 print(f"{done}/{total} verified bytes", file=sys.stderr)
             report = asyncio.run(download(
@@ -147,7 +150,8 @@ def main(argv=None):
             def progress(scenario, trial, policy, metrics):
                 print(f"{scenario} trial {trial} {policy}: {metrics['elapsed_seconds']:.3f}s", file=sys.stderr)
             report = asyncio.run(run_benchmark(trials=args.trials, size=int(args.size_mib * 1024 * 1024),
-                                              seed=args.seed, progress=progress))
+                                              seed=args.seed, progress=progress, suite=args.suite,
+                                              policies=tuple(args.policies.split(","))))
         write_report(report_path, report)
         print(json.dumps(report["summary"] if args.command == "benchmark" and report_path else report, indent=2))
         return 0
