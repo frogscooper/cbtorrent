@@ -143,15 +143,40 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report["connections"], 2)
 
     async def test_recovery_cancel_releases_sockets_without_training(self):
-        address = await self.seed(latency=0.2)
+        address = await self.seed()
         policy = RecoveryPolicy()
-        task = asyncio.create_task(download(self.torrent, [address], self.output, policy=policy))
-        await asyncio.sleep(0.05)
-        task.cancel()
-        with self.assertRaises(asyncio.CancelledError):
-            await task
-        await asyncio.sleep(0.05)
+        block_received = asyncio.Event()
+        hold_block = asyncio.Event()
+        receive = Peer.receive
+        clients = []
+
+        async def receive_then_pause(peer):
+            packet = await receive(peer)
+            if packet[0] == 7:
+                clients.append(peer)
+                block_received.set()
+                # Receive real TCP payload, but prevent any piece from reaching
+                # verification/commit before the test requests cancellation.
+                await hold_block.wait()
+            return packet
+
+        with patch.object(Peer, "receive", receive_then_pause):
+            task = asyncio.create_task(download(self.torrent, [address], self.output, policy=policy))
+            try:
+                await asyncio.wait_for(block_received.wait(), 5)
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await asyncio.wait_for(task, 5)
+            finally:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+        async with asyncio.timeout(5):
+            while self.servers[0].tasks:
+                await asyncio.sleep(0.01)
         self.assertEqual(policy.models, {})
+        self.assertEqual(policy.verified_bytes, 0)
+        self.assertTrue(all(peer.writer.is_closing() for peer in clients))
+        self.assertGreater(clients[0].metrics.payload_received_bytes, 0)
         self.assertFalse(self.servers[0].tasks)
         self.assertFalse(self.output.exists())
 
