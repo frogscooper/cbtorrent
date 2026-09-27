@@ -59,3 +59,4 @@ def evaluate(report):
 if __name__ == "__main__":
     with open(sys.argv[1], encoding="utf-8") as stream:
         print(json.dumps(evaluate(json.load(stream)), indent=2))
+

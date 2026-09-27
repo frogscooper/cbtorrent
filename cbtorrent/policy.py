@@ -277,9 +277,9 @@ class RecoveryPolicy(AdaptivePolicy):
         if expected is not None:
             cost = seconds / (size / 16384)
             interval = self.probe_intervals.get(peer, 16)
-            # Unchanged peers need fewer revisits. A material change restores
-            # the short interval so a second observation can confirm recovery.
-            self.probe_intervals[peer] = min(256, interval * 2) if expected / 2 <= cost <= 2 * expected else 16
+            # Unchanged peers need fewer revisits. A material change sets
+            # interval 1 so the next epoch can re-admit a confirmation probe.
+            self.probe_intervals[peer] = min(256, interval * 2) if expected / 2 <= cost <= 2 * expected else 1
         self.epoch += 1
         self.last_seen[peer] = self.epoch
         self.verified_bytes += size
