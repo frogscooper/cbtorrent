@@ -300,9 +300,95 @@ class RecoveryPolicy(AdaptivePolicy):
                  and self.models[p].predict(context.piece_size) <= 0.2 * horizon]
         if not stale:
             return best
-        peer = min(stale, key=lambda p: self.last_seen[p])
+        peer = self.select_probe(stale, best, context)
+        if peer is None:
+            return best
+        self.reserve_probe(peer, best, context)
+        return peer
+
+    def select_probe(self, stale, best, context):
+        return min(stale, key=lambda p: self.last_seen[p])
+
+    def reserve_probe(self, peer, best, context):
         self.last_seen[peer] = self.epoch  # Reserve before another concurrent decision.
         self.pending_probes[peer] = self.models[peer].predict(16384)
         self.probe_bytes += context.piece_size
         self.probes += 1
-        return peer
+
+
+class TimeBudgetPolicy(RecoveryPolicy):
+    """Charge revisits for predicted extra service time, then settle on outcome.
+
+    Credit is a fraction of observed service time plus estimated remaining work.
+    Pending probes reserve credit before another slot can spend it. A successful
+    recovery can release the reservation; a slow/failed attempt can overspend it
+    and block subsequent probes. This is admission control, not a time guarantee.
+    """
+
+    def __init__(self, *, time_fraction=0.02):
+        if not math.isfinite(time_fraction) or not 0 <= time_fraction <= 1:
+            raise ValueError("time_fraction must be finite and in [0, 1]")
+        super().__init__()
+        self.time_fraction = time_fraction
+        self.training_seconds = 0.0
+        self.extra_seconds = 0.0
+        self.time_reservations = {}
+        self.budget_denials = 0
+        self.max_admission_fraction = 0.0
+
+    def observe(self, peer, size, seconds):
+        super().observe(peer, size, seconds)
+        self.training_seconds += seconds
+
+    def probe_cost(self, peer, best, context):
+        baseline = self.models[best].predict(context.piece_size)
+        model = self.models[peer]
+        predicted = model.predict(context.piece_size) * (1 + model.relative_error())
+        return max(0, predicted - baseline), baseline
+
+    def estimated_work(self, best, context):
+        return self.training_seconds + self.models[best].predict(context.piece_size) * context.unclaimed_count
+
+    def select_probe(self, stale, best, context):
+        if self.time_fraction == 0:
+            self.budget_denials += 1
+            return None
+        committed = self.extra_seconds + sum(cost for cost, _ in self.time_reservations.values())
+        allowance = self.time_fraction * self.estimated_work(best, context)
+        for peer in sorted(stale, key=lambda p: self.last_seen[p]):
+            cost, _ = self.probe_cost(peer, best, context)
+            if committed + cost <= allowance:
+                return peer
+        self.budget_denials += 1
+        return None
+
+    def reserve_probe(self, peer, best, context):
+        cost, baseline = self.probe_cost(peer, best, context)
+        self.time_reservations[peer] = (cost, baseline)
+        committed = self.extra_seconds + sum(c for c, _ in self.time_reservations.values())
+        self.max_admission_fraction = max(self.max_admission_fraction,
+                                         committed / self.estimated_work(best, context))
+        super().reserve_probe(peer, best, context)
+
+    def attempt_finished(self, peer, seconds):
+        """Account for all attempts, including corruption, timeout, and cancel.
+
+        This does not train the speed model. The baseline is a prior prediction,
+        so the debit estimates opportunity cost, not measured counterfactual delay.
+        """
+        if not math.isfinite(seconds) or seconds < 0:
+            raise ValueError("attempt duration must be finite and nonnegative")
+        reservation = self.time_reservations.pop(peer, None)
+        if reservation is not None:
+            _, baseline = reservation
+            self.extra_seconds += max(0, seconds - baseline)
+            self.pending_probes.pop(peer, None)
+
+    def diagnostics(self):
+        result = super().diagnostics()
+        result.update(probe_extra_seconds=self.extra_seconds,
+                      probe_pending_seconds=sum(c for c, _ in self.time_reservations.values()),
+                      probe_budget_denials=self.budget_denials,
+                      probe_max_admission_fraction=self.max_admission_fraction,
+                      probe_time_fraction=self.time_fraction)
+        return result
