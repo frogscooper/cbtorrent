@@ -104,9 +104,10 @@ def build_parser():
     bench.add_argument("--policies", default="heuristic,bandit,adaptive")
     bench.add_argument("--report", type=Path)
     gui = commands.add_parser("gui", help="download with a desktop progress window (tkinter)")
-    gui.add_argument("torrent", type=Path)
+    gui.add_argument("torrent", type=Path, nargs="?")
     gui.add_argument("--peer", type=endpoint, action="append", default=[])
-    gui.add_argument("--output", type=Path, required=True)
+    gui.add_argument("--output", type=Path)
+    gui.add_argument("--policy", choices=("heuristic", "bandit", "adaptive", "optimistic", "recovery", "timed"), default="heuristic")
     gui.add_argument("--timeout", type=float, default=15.0)
     gui.add_argument("--piece-timeout", type=float, default=120.0)
     gui.add_argument("--pipeline", type=int, default=8)
@@ -144,7 +145,8 @@ def main(argv=None):
                 use_trackers=not args.no_trackers, listen_host=args.listen_host,
                 listen_port=args.port, timeout=args.timeout,
                 piece_timeout=args.piece_timeout, pipeline=args.pipeline,
-                concurrency=args.concurrency, max_connections=args.max_connections)
+                concurrency=args.concurrency, max_connections=args.max_connections,
+                policy_name=args.policy)
         if args.command == "download":
             torrent = Torrent.load(args.torrent)
             args.output.parent.mkdir(parents=True, exist_ok=True)
