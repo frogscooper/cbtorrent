@@ -1,1 +1,1 @@
-PLACEHOLDER_WILL_REPLACE
+@/workspace/cbtorrent/cbtorrent/policy.py
