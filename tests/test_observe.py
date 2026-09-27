@@ -86,12 +86,17 @@ class GuiCliTests(unittest.TestCase):
         parser = build_parser()
         args = parser.parse_args([
             "gui", "sample.torrent", "--output", "out.bin",
-            "--peer", "127.0.0.1:6881", "--no-trackers",
+            "--peer", "127.0.0.1:6881", "--no-trackers", "--policy", "adaptive",
         ])
         self.assertEqual(args.command, "gui")
         self.assertEqual(str(args.torrent), "sample.torrent")
         self.assertEqual(args.peer, [("127.0.0.1", 6881)])
         self.assertTrue(args.no_trackers)
+        self.assertEqual(args.policy, "adaptive")
+        empty = parser.parse_args(["gui"])
+        self.assertEqual(empty.command, "gui")
+        self.assertIsNone(empty.torrent)
+        self.assertIsNone(empty.output)
 
     def test_gui_package_imports_without_tkinter(self):
         # Controller and observe must not require a display.
