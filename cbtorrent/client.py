@@ -170,6 +170,10 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 update_started = perf_counter()
                 policy.observe(address, useful_bytes, transfer_seconds)
                 metrics.policy_update_seconds += perf_counter() - update_started
+            if hasattr(policy, "attempt_finished"):
+                update_started = perf_counter()
+                policy.attempt_finished(address, perf_counter() - started)
+                metrics.policy_update_seconds += perf_counter() - update_started
 
     try:
         storage = Storage(torrent, output, resume=resume)

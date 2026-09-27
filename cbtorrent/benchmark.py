@@ -10,7 +10,7 @@ from pathlib import Path
 from .client import DownloadError, download
 from .metainfo import create
 from .policy import (AdaptivePolicy, BanditPolicy, EWMAModel, PlannedHeuristic,
-                     RecoveryPolicy, ThroughputPolicy)
+                     RecoveryPolicy, ThroughputPolicy, TimeBudgetPolicy)
 from .seeder import FileSource, SeedServer
 
 POLICIES = {
@@ -22,6 +22,7 @@ POLICIES = {
     "recovery": RecoveryPolicy,
     "recovery-no-probe": lambda: RecoveryPolicy(probe=False),
     "ewma-probe": lambda: RecoveryPolicy(model_factory=EWMAModel),
+    "timed": TimeBudgetPolicy,
 }
 
 
@@ -37,10 +38,10 @@ class UnreliableSource:
 
 def scenarios_for(suite, size):
     kib = 1024
-    def case(rates, delay=0.002, changes=(), corrupt=None, piece_length=32768):
+    def case(rates, delay=0.002, changes=(), corrupt=None, piece_length=32768, concurrency=2):
         return dict(peers=[dict(rate=r * kib, latency=delay, corrupt=i == corrupt)
                            for i, r in enumerate(rates)],
-                    changes=list(changes), size=size, piece_length=piece_length)
+                    changes=list(changes), size=size, piece_length=piece_length, concurrency=concurrency)
     def change(after, peer, rate):
         return dict(after=after, peer=peer, rate=rate * kib)
     if suite == "baseline":
@@ -97,6 +98,20 @@ def scenarios_for(suite, size):
             "latency-heavy": case([384, 1280, 2304], delay=0.008, piece_length=16384),
             "bad-fast-peer": case([2560, 768, 1280, 320], corrupt=0, piece_length=65536),
             "slow-outlier": case([1920, 1280, 48, 768]),
+        }
+    if suite == "time-validation":
+        return {
+            "budget-static": case([224, 672, 1728, 1152], delay=0.003),
+            "before-midpoint": case([960, 576, 192], changes=[
+                change(0.25, 2, 3328)], piece_length=16384),
+            "late-change": case([1280, 832, 256, 512], changes=[change(1.2, 2, 2816)]),
+            "sustained-delay": case([320, 1408, 2112], delay=0.010, piece_length=16384),
+            "corrupt-with-spares": case([2816, 1536, 864, 288], corrupt=0, piece_length=65536),
+            "step-reversals": case([2112, 416, 960, 1472], changes=[
+                change(0.45, 0, 224), change(0.45, 1, 2880),
+                change(1.1, 1, 512), change(1.1, 0, 2560)]),
+            "three-slots": case([256, 896, 1280, 1728, 384], concurrency=3),
+            "serial-slow-peer": case([384, 1792, 896], piece_length=65536, concurrency=1),
         }
     raise ValueError("unknown benchmark suite")
 
@@ -192,7 +207,7 @@ async def run_benchmark(*, trials=3, size=1024 * 1024, seed=2026, progress=None,
                             change_task = asyncio.create_task(change_rates())
                             output = root / f"{scenario}-{trial}-{name}.bin"
                             try:
-                                report = await download(torrent, peers, output, concurrency=2,
+                                report = await download(torrent, peers, output, concurrency=config["concurrency"],
                                                         policy=POLICIES[name](), use_trackers=False,
                                                         timeout=3, piece_timeout=10)
                             except DownloadError as error:
@@ -220,13 +235,16 @@ async def run_benchmark(*, trials=3, size=1024 * 1024, seed=2026, progress=None,
                 values = [r[key] for r in successful]
                 item[f"median_{key}"] = statistics.median(values) if values else None
                 item[f"stdev_{key}"] = statistics.stdev(values) if len(values) > 1 else None
+                item[f"max_{key}"] = max(values) if values else None
             summary.append(item)
     return dict(
-        schema_version=3, suite=suite, seed=seed, trials=trials, size_bytes=size,
+        schema_version=4, suite=suite, seed=seed, trials=trials, size_bytes=size,
         code_sha256=code_hash.hexdigest(), policies=list(policies),
         python=platform.python_version(), platform=platform.platform(),
-        concurrency=2, pipeline=8, scenarios=scenarios,
+        concurrency=(next(iter(scenarios.values()))["concurrency"]
+                     if len({c["concurrency"] for c in scenarios.values()}) == 1 else None),
+        pipeline=8, scenarios=scenarios,
         note="Local loopback with application-level rate/delay injection. Not public-swarm evidence. Bootstrap intervals are descriptive, per-scenario, not multiple-comparison corrected.",
         summary=summary, comparisons=[comparison
-            for baseline in ("heuristic", "adaptive", "ewma-probe") if baseline in policies
+            for baseline in ("heuristic", "adaptive", "recovery", "ewma-probe") if baseline in policies
             for comparison in paired_comparisons(rows, policies, baseline=baseline)], runs=rows)
