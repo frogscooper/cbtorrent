@@ -103,6 +103,19 @@ def build_parser():
                                          "recovery-development", "recovery-validation", "time-validation"), default="baseline")
     bench.add_argument("--policies", default="heuristic,bandit,adaptive")
     bench.add_argument("--report", type=Path)
+    gui = commands.add_parser("gui", help="download with a desktop progress window (tkinter)")
+    gui.add_argument("torrent", type=Path)
+    gui.add_argument("--peer", type=endpoint, action="append", default=[])
+    gui.add_argument("--output", type=Path, required=True)
+    gui.add_argument("--timeout", type=float, default=15.0)
+    gui.add_argument("--piece-timeout", type=float, default=120.0)
+    gui.add_argument("--pipeline", type=int, default=8)
+    gui.add_argument("--concurrency", type=int, default=4)
+    gui.add_argument("--max-connections", type=int, default=16)
+    gui.add_argument("--resume", action="store_true")
+    gui.add_argument("--no-trackers", action="store_true")
+    gui.add_argument("--listen-host", default="0.0.0.0")
+    gui.add_argument("--port", type=int, default=0)
     return parser
 
 
@@ -117,13 +130,21 @@ def write_report(path, report):
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     # Keep the initial milestone's "cbtorrent FILE --peer ..." invocation working.
-    if argv and argv[0] not in ("download", "seed", "create", "inspect", "benchmark") and not argv[0].startswith("-"):
+    if argv and argv[0] not in ("download", "seed", "create", "inspect", "benchmark", "gui") and not argv[0].startswith("-"):
         argv.insert(0, "download")
     args = build_parser().parse_args(argv)
     try:
         report_path = getattr(args, "report", None)
         if report_path and report_path.exists():
             raise FileExistsError(f"report already exists: {report_path}")
+        if args.command == "gui":
+            from .gui import run as run_gui
+            return run_gui(
+                args.torrent, args.output, peers=args.peer, resume=args.resume,
+                use_trackers=not args.no_trackers, listen_host=args.listen_host,
+                listen_port=args.port, timeout=args.timeout,
+                piece_timeout=args.piece_timeout, pipeline=args.pipeline,
+                concurrency=args.concurrency, max_connections=args.max_connections)
         if args.command == "download":
             torrent = Torrent.load(args.torrent)
             args.output.parent.mkdir(parents=True, exist_ok=True)
