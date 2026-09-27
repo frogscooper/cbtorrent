@@ -9,8 +9,8 @@ from pathlib import Path
 
 from .client import DownloadError, download
 from .metainfo import create
-from .policy import (AdaptivePolicy, BanditPolicy, EWMAModel, PlannedHeuristic,
-                     RecoveryPolicy, ThroughputPolicy, TimeBudgetPolicy)
+from .policy import (AdaptivePolicy, BanditPolicy, EWMAModel, OptimisticPolicy,
+                     PlannedHeuristic, RecoveryPolicy, ThroughputPolicy, TimeBudgetPolicy)
 from .seeder import FileSource, SeedServer
 
 POLICIES = {
@@ -18,6 +18,7 @@ POLICIES = {
     "bandit": BanditPolicy,
     "adaptive": AdaptivePolicy,
     "adaptive-no-defer": lambda: AdaptivePolicy(defer=False),
+    "optimistic": OptimisticPolicy,
     "planned-heuristic": PlannedHeuristic,
     "recovery": RecoveryPolicy,
     "recovery-no-probe": lambda: RecoveryPolicy(probe=False),

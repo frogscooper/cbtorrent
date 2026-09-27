@@ -193,6 +193,45 @@ class PlannedHeuristic(AdaptivePolicy):
         pass
 
 
+class OptimisticPolicy(AdaptivePolicy):
+    """EWLS ranking with an optimistic residual discount among known peers.
+
+    score = predict(piece) * (1 - beta * relative_error()); pick the minimum.
+    Unseen exploration matches AdaptivePolicy. Deferral stays off in v1 so the
+    residual term is not mixed with busy-peer wait logic.
+    """
+
+    def __init__(self, *, beta=0.25, forgetting=0.8):
+        if not math.isfinite(beta) or not 0 <= beta <= 0.5:
+            raise ValueError("beta must be finite and in [0, 0.5]")
+        super().__init__(forgetting=forgetting, defer=False)
+        self.beta = beta
+
+    def observe(self, peer, size, seconds):
+        model = self.models.get(peer) or ServiceModel(self.forgetting)
+        model.update(size, seconds)
+        self.models[peer] = model
+
+    def score(self, peer, size=16384):
+        model = self.models[peer]
+        return model.predict(size) * (1 - self.beta * model.relative_error())
+
+    def choose(self, peers, observations):
+        unseen = [peer for peer in peers if peer not in self.models]
+        if unseen:
+            return unseen[0]
+        return min(peers, key=self.score)
+
+    def choose_with_context(self, peers, observations, context):
+        known = [p for p in peers if p in self.models]
+        unseen = [p for p in peers if p not in self.models]
+        if unseen and (not known or context.unclaimed_count > 2 * context.concurrency):
+            return unseen[0]
+        if not known:
+            return self.fallback.choose(peers, observations)
+        return min(known, key=lambda peer: self.score(peer, context.piece_size))
+
+
 @dataclass
 class ResponsiveModel(ServiceModel):
     """Reset stale history only after two consistent, large prediction errors.

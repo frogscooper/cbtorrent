@@ -8,7 +8,8 @@ from .benchmark import run_benchmark
 from .client import DownloadError, download
 from .metainfo import Torrent, create
 from .metrics import Metrics
-from .policy import AdaptivePolicy, BanditPolicy, RecoveryPolicy, ThroughputPolicy, TimeBudgetPolicy
+from .policy import (AdaptivePolicy, BanditPolicy, OptimisticPolicy, RecoveryPolicy,
+                     ThroughputPolicy, TimeBudgetPolicy)
 from .seeder import FileSource, SeedServer
 from .tracker import announce
 
@@ -73,7 +74,7 @@ def build_parser():
     get.add_argument("--pipeline", type=int, default=8)
     get.add_argument("--concurrency", type=int, default=4)
     get.add_argument("--max-connections", type=int, default=16)
-    get.add_argument("--policy", choices=("heuristic", "bandit", "adaptive", "recovery", "timed"), default="heuristic")
+    get.add_argument("--policy", choices=("heuristic", "bandit", "adaptive", "optimistic", "recovery", "timed"), default="heuristic")
     get.add_argument("--resume", action="store_true")
     get.add_argument("--no-trackers", action="store_true")
     get.add_argument("--listen-host", default="0.0.0.0")
@@ -127,8 +128,8 @@ def main(argv=None):
             torrent = Torrent.load(args.torrent)
             args.output.parent.mkdir(parents=True, exist_ok=True)
             policy = {"heuristic": ThroughputPolicy, "bandit": BanditPolicy,
-                      "adaptive": AdaptivePolicy, "recovery": RecoveryPolicy,
-                      "timed": TimeBudgetPolicy}[args.policy]()
+                      "adaptive": AdaptivePolicy, "optimistic": OptimisticPolicy,
+                      "recovery": RecoveryPolicy, "timed": TimeBudgetPolicy}[args.policy]()
             def progress(done, total):
                 print(f"{done}/{total} verified bytes", file=sys.stderr)
             report = asyncio.run(download(
