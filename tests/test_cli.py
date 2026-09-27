@@ -37,7 +37,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
                 line = await asyncio.wait_for(seed.stdout.readline(), 10)
                 self.assertIn(b"Seeding", line)
                 port = int(line.strip().rsplit(b":", 1)[1])
-                for policy in ("bandit", "recovery"):
+                for policy in ("bandit", "recovery", "timed"):
                     with self.subTest(policy=policy):
                         report_path = root / "reports" / f"{policy}.json"
                         target = output.with_name(policy)
@@ -48,8 +48,10 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(target.read_bytes(), content)
                         self.assertTrue(report["complete"])
                         self.assertEqual(json.loads(report_path.read_text()), report)
-                        if policy == "recovery":
+                        if policy in ("recovery", "timed"):
                             self.assertEqual(report["policy_diagnostics"]["training_bytes"], len(content))
+                        if policy == "timed":
+                            self.assertEqual(report["policy_diagnostics"]["probe_pending_seconds"], 0)
             finally:
                 if seed.returncode is None:
                     seed.terminate()

@@ -8,7 +8,7 @@ from unittest.mock import patch
 from cbtorrent.client import DownloadError, download
 from cbtorrent.metainfo import Torrent, create
 from cbtorrent.metrics import Metrics
-from cbtorrent.policy import AdaptivePolicy, BanditPolicy, Observation, RecoveryPolicy
+from cbtorrent.policy import AdaptivePolicy, BanditPolicy, Observation, RecoveryPolicy, TimeBudgetPolicy
 from cbtorrent.seeder import FileSource, SeedServer
 from cbtorrent.storage import Storage
 from cbtorrent.wire import Peer, message
@@ -142,9 +142,11 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report["wasted_payload_bytes"], 0)
         self.assertEqual(report["connections"], 2)
 
-    async def test_recovery_cancel_releases_sockets_without_training(self):
+    async def test_recovery_cancel_releases_sockets_without_training(self, factory=RecoveryPolicy):
         address = await self.seed()
-        policy = RecoveryPolicy()
+        policy = factory()
+        if isinstance(policy, TimeBudgetPolicy):
+            policy.time_reservations[address] = (0.1, 0)
         block_received = asyncio.Event()
         hold_block = asyncio.Event()
         receive = Peer.receive
@@ -179,6 +181,23 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(clients[0].metrics.payload_received_bytes, 0)
         self.assertFalse(self.servers[0].tasks)
         self.assertFalse(self.output.exists())
+        if isinstance(policy, TimeBudgetPolicy):
+            self.assertEqual(policy.time_reservations, {})
+            self.assertGreater(policy.extra_seconds, 0)
+
+    async def test_timed_cancel_settles_outstanding_time_without_training(self):
+        await self.test_recovery_cancel_releases_sockets_without_training(TimeBudgetPolicy)
+
+    async def test_timed_disk_failure_settles_outstanding_time_without_training(self):
+        peer = await self.seed()
+        policy = TimeBudgetPolicy()
+        policy.time_reservations[peer] = (0.1, 0)
+        with patch.object(Storage, "write", side_effect=OSError("disk full")):
+            with self.assertRaises(DownloadError):
+                await download(self.torrent, [peer], self.output, policy=policy)
+        self.assertEqual(policy.models, {})
+        self.assertEqual(policy.time_reservations, {})
+        self.assertGreater(policy.extra_seconds, 0)
 
     async def test_recovery_disk_failure_does_not_train(self):
         peer = await self.seed()

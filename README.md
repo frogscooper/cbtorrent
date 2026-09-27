@@ -132,6 +132,12 @@ allocation limit is not a wall-time limit; normal transfer deadlines still apply
 See [the recovery experiment](benchmarks/RECOVERY_EXPERIMENT.md) for fresh held-out
 results and comparison with an EWMA using the same probing rules.
 
+`--policy timed` adds a predicted time allowance to recovery's byte budget. It
+tries an overlooked peer only when the estimated extra time fits that allowance,
+then accounts for the attempt's duration even if it fails or is cancelled. This
+reduces some costs of trying peers that stay slow. It passed the predeclared local
+evaluation gates; it remains opt-in, and the heuristic remains the default.
+
 ## Reproducible benchmark
 
 ```powershell
@@ -159,6 +165,15 @@ keys are rejected. `recovery-no-probe` isolates the change detector; `ewma-probe
 uses identical probe eligibility, backoff, and byte limits with a simple moving
 average. Both are benchmark-only ablations.
 
+The `time-validation` suite evaluates a `timed` candidate against recovery using
+fresh scenarios, 1/2/3 concurrent transfers, and a predicted service-time allowance
+for revisits. It reserves estimated extra time before scheduling and accounts for
+the attempt afterward, including failures and cancellation. See
+[the time-budget experiment](benchmarks/TIME_BUDGET_EXPERIMENT.md) for the fixed
+acceptance criteria and full results. Schema 4 reports add observed maxima for
+summary metrics and per-scenario concurrency; top-level concurrency is null when
+the suite varies it. Maxima from small samples are not reliable p95/p99 estimates.
+
 These small local scenarios are regression/research fixtures. They do not model
 real TCP congestion, NAT, public-swarm churn, or disk contention. Seeder CPU is
 included because fixtures share the process. Timing depends on the OS scheduler.
@@ -179,9 +194,17 @@ Do not infer public-swarm improvement from a local win.
 | `tracker_response_bytes` | HTTP response bodies or UDP response datagrams, separately from peer traffic. |
 | `connections`, `peer_failures`, `hash_failures` | Outbound connection attempts, retired sessions, and integrity failures. |
 | `policy_seconds` | Time spent selecting peers. |
-| `policy_update_seconds` | Additional time spent training an online policy. |
+| `policy_update_seconds` | Time spent training an online policy and running its attempt-accounting callback, when present. |
 | `policy_deferrals` | Scheduling decisions that briefly waited for in-flight work. |
 | `policy_diagnostics` | Recovery-policy counters: revisit selections (`probes`), conservative `reserved_probe_bytes`, successfully committed `training_bytes`, and confirmed `model_resets`. Initial peer discovery is excluded from probes. Reservations are not refunded after failure and do not represent duplicate/wasted payload. |
+
+The timed candidate additionally reports `probe_extra_seconds` (finished attempt
+duration minus the previously predicted alternative, clamped at zero),
+`probe_pending_seconds` (outstanding predicted costs), `probe_budget_denials`,
+`probe_max_admission_fraction`, and the configured `probe_time_fraction`. These
+are service-time accounting estimates, not measured download delay or a guarantee
+of a maximum slowdown. Failed-download snapshots may precede cleanup callbacks;
+the policy itself settles outstanding entries as those attempts exit.
 
 Metrics are a snapshot before post-completion tracker announcements and final
 connection cleanup. They exclude TCP/IP headers, retransmissions, unconsumed

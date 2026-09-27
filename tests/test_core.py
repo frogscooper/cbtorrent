@@ -8,7 +8,7 @@ from pathlib import Path
 from cbtorrent.bencode import decode, encode
 from cbtorrent.client import DownloadError, download
 from cbtorrent.metainfo import Torrent
-from cbtorrent.policy import Observation, RecoveryPolicy, ThroughputPolicy
+from cbtorrent.policy import Observation, RecoveryPolicy, ThroughputPolicy, TimeBudgetPolicy
 
 
 def metadata(data, piece_length=32768):
@@ -182,6 +182,25 @@ class TransferTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(policy.verified_bytes, len(self.data))
                 self.assertEqual(sum(m.samples for m in policy.models.values()), len(self.torrent.hashes))
                 self.assertEqual(report["connections"], 2)
+
+    async def test_timed_policy_accounts_for_failed_attempts_without_learning_them(self):
+        for fault in ("corrupt", "stall", "choke"):
+            with self.subTest(fault=fault):
+                bad, good = await self.seed(**{fault: True}), await self.seed()
+                policy = TimeBudgetPolicy()
+                # Put one outstanding debit in the ledger to exercise the
+                # engine's cleanup callback on each actual network failure.
+                policy.time_reservations[bad] = (0.1, 0)
+                output = self.output.with_name("timed-" + fault + ".bin")
+                report = await asyncio.wait_for(download(
+                    self.torrent, [bad, good], output, concurrency=1,
+                    policy=policy, timeout=0.1, piece_timeout=0.4), 5)
+                self.assertEqual(output.read_bytes(), self.data)
+                self.assertNotIn(bad, policy.models)
+                self.assertEqual(policy.time_reservations, {})
+                self.assertGreater(policy.extra_seconds, 0)
+                self.assertEqual(report["policy_diagnostics"]["probe_pending_seconds"], 0)
+                self.assertEqual(report["peer_failures"], 1)
 
     async def test_out_of_order_pipelined_blocks(self):
         address = await self.seed(reverse_blocks=True)
