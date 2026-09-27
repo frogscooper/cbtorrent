@@ -139,7 +139,10 @@ class RecoveryPolicyTests(unittest.TestCase):
             policy.observe(self.fast, 32768, 0.04)
         self.assertEqual(policy.choose_with_context(peers, {}, self.context()), self.slow)
         policy.observe(self.slow, 32768, 0.01)
-        self.assertEqual(policy.probe_intervals[self.slow], 16)
+        self.assertEqual(policy.probe_intervals[self.slow], 1)
+        # Confirmation probe eligible after one intervening observe.
+        policy.observe(self.fast, 32768, 0.04)
+        self.assertEqual(policy.choose_with_context(peers, {}, self.context()), self.slow)
 
     def test_invalid_sample_does_not_spend_budget_or_advance_epoch(self):
         policy = self.prepared()
