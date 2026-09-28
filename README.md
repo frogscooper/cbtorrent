@@ -57,9 +57,15 @@ python -m cbtorrent gui example.torrent --output downloads/example.bin --peer 12
 If there is no display, no tkinter, or `Tk()` fails, the process exits non-zero and
 points you at `cbtorrent download`. There is no silent CLI fallback.
 
-Toolbar: **Add torrent…**, policy menu (heuristic default), **Start** / **Stop**.
-The window shows piece progress, rates, peer count, ETA, and a peer list. Esc stops
-a running download and keeps the `.part` file.
+Toolbar: **Add** | **Remove** | **Pause** | **Resume** | **Policy** (heuristic is the
+default for new torrents and the session). Upper pane is the queue
+(`#` | Name | Progress | ↓ | ↑ | Status) in session order. Selecting a row shows
+detail: progress bar, rates, peers. Esc pauses the selected downloading torrent and
+keeps the `.part` file. At most one download runs at a time.
+
+Queue and status persist to `~/.cbtorrent/session.json` (Windows:
+`%USERPROFILE%\.cbtorrent\session.json`). On open, the GUI restores the queue and
+auto-resumes at most one torrent that was downloading.
 
 ### Headless download
 
@@ -137,7 +143,7 @@ public churn, or disk contention. Do not treat a localhost win as a public-swarm
 - Incoming upload listener during downloads; standalone seed server
 - HTTP(S) and IPv4 UDP trackers; explicit IPv4/IPv6 peers
 - JSON metrics and per-peer observations
-- Desktop GUI as the default launch path; headless subcommands for scripts and CI
+- Desktop GUI as the default launch path with multi-torrent queue and session persistence; headless subcommands for scripts and CI
 
 Defaults for downloads: 4 concurrent pieces, up to 16 outbound connections, 8 pipelined
 requests per peer, 15 s I/O timeout, 120 s piece deadline. Up to 200 peer candidates and
