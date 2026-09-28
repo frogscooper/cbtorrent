@@ -24,6 +24,8 @@ protocol correctness and useful measurements before optimizing a policy.
 - `seeder.py`: upload listener and verified file source.
 - `tracker.py`: HTTP(S)/UDP announces. All network operations need deadlines and
   input size limits; keep cancellation effective.
+- `dht.py`: IPv4 DHT (BEP 5) get_peers / announce_peer. Discovery stays in the client;
+  keep bootstrap injectable and tests on local UDP only (no public swarm as CI fixture).
 - `policy.py`: observations, heuristic, and optional bandit. Do not train with
   benchmark ground truth or future peer behavior. Keep the heuristic available.
 - `metrics.py` / `benchmark.py`: measurement definitions and paired experiments.

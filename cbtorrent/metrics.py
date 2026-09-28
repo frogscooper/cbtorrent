@@ -13,6 +13,10 @@ class Metrics:
     tracker_response_bytes: int = 0
     tracker_requests: int = 0
     tracker_failures: int = 0
+    dht_response_bytes: int = 0
+    dht_requests: int = 0
+    dht_failures: int = 0
+    dht_peers: int = 0
     connections: int = 0
     peer_failures: int = 0
     hash_failures: int = 0
