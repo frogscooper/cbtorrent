@@ -30,7 +30,7 @@ class LiveObserveTests(unittest.IsolatedAsyncioTestCase):
 
                 report = await download(
                     torrent, [("127.0.0.1", port)], root / "out.bin",
-                    policy=ThroughputPolicy(), use_trackers=False,
+                    policy=ThroughputPolicy(), use_trackers=False, use_dht=False,
                     listen_host="127.0.0.1", timeout=5, piece_timeout=20,
                     observe=observe)
                 self.assertTrue(report["complete"])
