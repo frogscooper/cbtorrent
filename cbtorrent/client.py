@@ -8,6 +8,7 @@ from pathlib import Path
 from time import perf_counter
 
 from .metrics import Metrics
+from .observe import build_snapshot
 from .policy import ActiveTransfer, Observation, SchedulingContext, ThroughputPolicy
 from .seeder import SeedServer
 from .storage import Storage
@@ -24,7 +25,7 @@ class DownloadError(Exception):
 async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=120.0,
                    pipeline=8, policy=None, concurrency=4, max_connections=16,
                    resume=False, use_trackers=True, listen_host="127.0.0.1",
-                   listen_port=0, progress=None):
+                   listen_port=0, progress=None, observe=None):
     """Each task owns one connection and reserves at most one piece.
 
     Storage operations run on the event loop, preventing shared seek races.
@@ -69,6 +70,20 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         if hasattr(policy, "diagnostics"):
             result["policy_diagnostics"] = policy.diagnostics()
         return result
+
+    last_emit = [0.0]
+
+    def emit(status="running", error=None):
+        if observe is None:
+            return
+        now = perf_counter()
+        if status == "running" and now - last_emit[0] < 0.2:
+            return
+        last_emit[0] = now
+        observe(build_snapshot(
+            name=torrent.name, length=torrent.length, metrics=metrics,
+            observations=observations, sessions=sessions, active=active,
+            retired=retired, status=status, error=error))
 
     async def tracker_update(url, event):
         metrics.tracker_requests += 1
@@ -157,6 +172,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 await peer.send(message(4, index.to_bytes(4, "big")))
                 if progress is not None:
                     progress(metrics.resumed_bytes + metrics.verified_bytes, torrent.length)
+                emit()
         except (OSError, ValueError, asyncio.TimeoutError, asyncio.IncompleteReadError) as error:
             failed = True
             await retire(address, error)
@@ -185,7 +201,9 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         if remaining and tracker_urls:
             await asyncio.gather(*(tracker_update(url, "started") for url in tracker_urls))
             tracker_task = asyncio.create_task(refresh_trackers())
+        emit()
         while remaining:
+            emit()
             busy = set(tasks.values())
             deferred = False
             while len(tasks) < concurrency and remaining - claimed:
@@ -239,11 +257,16 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         await server.close()
         storage.publish()
         result = report(complete=True)
+        emit(status="complete")
         if started_trackers:
             await asyncio.gather(*(tracker_update(url, "completed") for url in tuple(started_trackers)))
         return result
     except (OSError, ValueError, ConnectionError) as error:
+        emit(status="error", error=str(error))
         raise DownloadError(str(error), report()) from error
+    except asyncio.CancelledError:
+        emit(status="cancelled")
+        raise
     finally:
         if tracker_task is not None:
             tracker_task.cancel()
