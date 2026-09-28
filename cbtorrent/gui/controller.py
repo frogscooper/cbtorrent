@@ -43,7 +43,7 @@ class DownloadController:
         self._set_snapshot(snapshot)
 
     def start(self, torrent: Torrent, peers, output: Path, *, resume=False,
-              use_trackers=True, listen_host="0.0.0.0", listen_port=0,
+              use_trackers=True, use_dht=True, listen_host="0.0.0.0", listen_port=0,
               timeout=15.0, piece_timeout=120.0, pipeline=8, concurrency=4,
               max_connections=16, policy=None, item_id=None):
         if self.busy:
@@ -70,7 +70,7 @@ class DownloadController:
                     piece_timeout=piece_timeout, pipeline=pipeline,
                     concurrency=concurrency, max_connections=max_connections,
                     resume=resume, policy=policy, use_trackers=use_trackers,
-                    listen_host=listen_host, listen_port=listen_port,
+                    use_dht=use_dht, listen_host=listen_host, listen_port=listen_port,
                     observe=self._observe))
                 loop.run_until_complete(self._task)
             except asyncio.CancelledError:
