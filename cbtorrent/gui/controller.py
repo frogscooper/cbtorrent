@@ -24,6 +24,7 @@ class DownloadController:
         self._task: asyncio.Task | None = None
         self._error: str | None = None
         self.output: Path | None = None
+        self.active_id: str | None = None
 
     @property
     def snapshot(self) -> DownloadSnapshot | None:
@@ -44,10 +45,11 @@ class DownloadController:
     def start(self, torrent: Torrent, peers, output: Path, *, resume=False,
               use_trackers=True, listen_host="0.0.0.0", listen_port=0,
               timeout=15.0, piece_timeout=120.0, pipeline=8, concurrency=4,
-              max_connections=16, policy=None):
+              max_connections=16, policy=None, item_id=None):
         if self.busy:
             raise RuntimeError("download already running")
         self.output = Path(output)
+        self.active_id = item_id
         self._error = None
         self._rates = RateTracker()
         self._set_snapshot(DownloadSnapshot(
