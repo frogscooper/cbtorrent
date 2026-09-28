@@ -45,13 +45,13 @@ cbtorrent --help
 
 Stdlib tkinter only. Idle window when argv is empty. `gui` remains an explicit alias.
 A bare `.torrent` path opens the GUI with that torrent preloaded (flags such as
-`--output`, `--peer`, `--policy`, and `--no-trackers` still apply).
+`--output`, `--peer`, `--policy`, `--no-trackers`, and `--no-dht` still apply).
 
 ```bash
 python -m cbtorrent
 python -m cbtorrent gui
 python -m cbtorrent example.torrent --output downloads/example.bin
-python -m cbtorrent gui example.torrent --output downloads/example.bin --peer 127.0.0.1:6881 --no-trackers
+python -m cbtorrent gui example.torrent --output downloads/example.bin --peer 127.0.0.1:6881 --no-trackers --no-dht
 ```
 
 If there is no display, no tkinter, or `Tk()` fails, the process exits non-zero and
@@ -59,12 +59,12 @@ points you at `cbtorrent download`. There is no silent CLI fallback.
 
 Toolbar: **Add** | **Remove** | **Pause** | **Resume** | **Policy** (heuristic is the
 default for new torrents and the session). Upper pane is the queue
-(`#` | Name | Progress | ↓ | ↑ | Status) in session order. Selecting a row shows
+(`#` | Name | Progress | \u2193 | \u2191 | Status) in session order. Selecting a row shows
 detail: progress bar, rates, peers. Esc pauses the selected downloading torrent and
 keeps the `.part` file. At most one download runs at a time.
 
 Queue and status persist to `~/.cbtorrent/session.json` (Windows:
-`%USERPROFILE%\.cbtorrent\session.json`). On open, the GUI restores the queue and
+`%USERPROFILE%\\.cbtorrent\\session.json`). On open, the GUI restores the queue and
 auto-resumes at most one torrent that was downloading.
 
 ### Headless download
@@ -78,10 +78,10 @@ python -m cbtorrent download example.torrent --output downloads/example.bin --pr
 Explicit peers, an opt-in policy, and a metrics report:
 
 ```bash
-python -m cbtorrent download example.torrent \
-  --peer 127.0.0.1:6881 --no-trackers \
-  --output downloads/example.bin \
-  --policy bandit \
+python -m cbtorrent download example.torrent \\
+  --peer 127.0.0.1:6881 --no-trackers --no-dht \\
+  --output downloads/example.bin \\
+  --policy bandit \\
   --report reports/run-01.json
 ```
 
@@ -104,7 +104,7 @@ python -m cbtorrent seed sample.torrent --file sample.bin --port 6881
 
 Local two-terminal smoke test: omit `--tracker` when creating, seed with
 `--listen-host 127.0.0.1 --no-trackers`, then download with
-`--peer 127.0.0.1:6881 --no-trackers` to a different output path. `seed` verifies the
+`--peer 127.0.0.1:6881 --no-trackers --no-dht` to a different output path. `seed` verifies the
 complete file before serving and runs until Ctrl+C. A download exits when the file is
 done; keep seeding with `seed` if you want to stay available.
 
@@ -141,19 +141,20 @@ public churn, or disk contention. Do not treat a localhost win as a public-swarm
 - TCP handshake, bitfield/have, choke, pipelined 16 KiB requests
 - Concurrent pieces, rarest-first among known peers, bounded connection cache, safe resume
 - Incoming upload listener during downloads; standalone seed server
-- HTTP(S) and IPv4 UDP trackers; explicit IPv4/IPv6 peers
+- HTTP(S) and IPv4 UDP trackers; IPv4 DHT (BEP 5) peer discovery; explicit IPv4/IPv6 peers
 - JSON metrics and per-peer observations
 - Desktop GUI as the default launch path with multi-torrent queue and session persistence; headless subcommands for scripts and CI
 
 Defaults for downloads: 4 concurrent pieces, up to 16 outbound connections, 8 pipelined
 requests per peer, 15 s I/O timeout, 120 s piece deadline. Up to 200 peer candidates and
-the first 8 unique tracker URLs. Incoming clients use a separate cap equal to
+the first 8 unique tracker URLs. DHT peer discovery is on by default alongside trackers;
+disable with `--no-dht`. Incoming clients use a separate cap equal to
 `--max-connections`. Run `python -m cbtorrent download --help` for the full flag list.
 
 ## Limits
 
-Not present: magnet links, DHT, PEX, uTP, encryption, multi-file or v2 torrents, endgame
-duplication, automatic NAT mapping, classic tit-for-tat upload slots. Outbound connections
+Not present: magnet links (BEP 9 metadata fetch), PEX, uTP, encryption, multi-file or v2 torrents,
+endgame duplication, automatic NAT mapping, classic tit-for-tat upload slots. Outbound connections
 are download-oriented; uploads use the incoming listener. Peers retired after failure are
 not retried in that run. Storage and hashing run on the event loop. Publication uses an
 exclusive hard link in the same directory when the filesystem supports it; otherwise the
@@ -167,4 +168,5 @@ CI runs the unit suite and the installed CLI on Windows and Linux (Python 3.11 a
 
 Protocol references: [BEP 3](https://www.bittorrent.org/beps/bep_0003.html),
 [BEP 23](https://www.bittorrent.org/beps/bep_0023.html),
-[BEP 15](https://www.bittorrent.org/beps/bep_0015.html).
+[BEP 15](https://www.bittorrent.org/beps/bep_0015.html),
+[BEP 5](https://www.bittorrent.org/beps/bep_0005.html).
