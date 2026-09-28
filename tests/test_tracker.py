@@ -125,7 +125,7 @@ class TrackerTests(unittest.IsolatedAsyncioTestCase):
             url = await self.http(socket.inet_aton("127.0.0.1") + struct.pack("!H", port))
             torrent = replace(torrent, trackers=(url,))
             output = self.root / "result"
-            report = await download(torrent, [], output)
+            report = await download(torrent, [], output, use_dht=False)
             self.assertEqual(output.read_bytes(), data)
             self.assertTrue(report["complete"])
             self.assertEqual([row["event"] for row in self.events], [b"started", b"completed", b"stopped"])
