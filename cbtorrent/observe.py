@@ -1,4 +1,4 @@
-"""Live download snapshots for UIs. No protocol logic — metrics only."""
+"""Live download snapshots for UIs. No protocol logic: metrics only."""
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -56,9 +56,9 @@ def format_rate(bps: float) -> str:
 
 def format_eta(seconds: float | None) -> str:
     if seconds is None or seconds < 0 or seconds != seconds:  # NaN
-        return "—"
+        return "unknown"
     if seconds == float("inf"):
-        return "—"
+        return "unknown"
     total = int(seconds + 0.5)
     if total < 60:
         return f"{total}s"

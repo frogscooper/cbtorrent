@@ -16,7 +16,7 @@ class FormatTests(unittest.TestCase):
         self.assertEqual(format_rate(2048), "2.0 KiB/s")
 
     def test_format_eta_and_percent(self):
-        self.assertEqual(format_eta(None), "—")
+        self.assertEqual(format_eta(None), "unknown")
         self.assertEqual(format_eta(12), "12s")
         self.assertEqual(format_eta(75), "1m 15s")
         self.assertEqual(format_eta(3725), "1h 02m")
