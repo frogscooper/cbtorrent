@@ -13,14 +13,15 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
         resume=False, use_trackers=True, listen_host="0.0.0.0", listen_port=0,
         timeout=15.0, piece_timeout=120.0, pipeline=8, concurrency=4,
         max_connections=16, policy_name="heuristic"):
+    _NO_DISPLAY = (
+        "Desktop GUI needs a display and tkinter. Install the OS tk package "
+        "(e.g. python3-tk) or use `cbtorrent download` instead."
+    )
     try:
         import tkinter as tk
         from tkinter import filedialog, ttk
     except ImportError as error:
-        raise SystemExit(
-            "tkinter is not available in this Python. Install the OS tk package "
-            "(e.g. python3-tk) or use `cbtorrent download` instead."
-        ) from error
+        raise SystemExit(_NO_DISPLAY) from error
 
     controller = DownloadController()
     state = {
@@ -35,7 +36,10 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
         if state["output"] is None:
             state["output"] = Path("downloads") / state["meta"].name
 
-    root = tk.Tk()
+    try:
+        root = tk.Tk()
+    except tk.TclError as error:
+        raise SystemExit(_NO_DISPLAY) from error
     root.title("cbtorrent")
     root.geometry("720x480")
     root.minsize(720, 480)
@@ -173,7 +177,7 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
 
     # 2. Header
     header_var = tk.StringVar(
-        value=state["meta"].name if state["meta"] is not None else "No torrent")
+        value=state["meta"].name if state["meta"] is not None else "no torrent")
     ttk.Label(outer, textvariable=header_var, style="Accent.TLabel",
               font=("Segoe UI", 14, "bold")).pack(anchor="w", pady=(8, 0))
 
@@ -218,7 +222,7 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
     status_frame = ttk.Frame(outer, style="Panel.TFrame", padding=(10, 8))
     status_frame.pack(fill="x", pady=(8, 0))
     status_var = tk.StringVar(
-        value="Idle — ready to start" if state["meta"] is not None else "Idle — add a torrent")
+        value="Idle — ready to start" if state["meta"] is not None else "add a torrent to start")
     ttk.Label(status_frame, textvariable=status_var, style="Status.TLabel").pack(anchor="w")
 
     root.bind("\u003cEscape\u003e", stop_download)

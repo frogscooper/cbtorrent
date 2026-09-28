@@ -17,6 +17,9 @@ python -m unittest discover -s tests -v
 python -m cbtorrent --help
 ```
 
+Plain `python -m cbtorrent` (or `cbtorrent`) opens the desktop GUI. Headless
+downloads require an explicit `download` subcommand.
+
 Optional installation in a virtual environment:
 
 ```powershell
@@ -52,12 +55,22 @@ automatic NAT port mapping.
 
 ## Desktop GUI
 
-A minimal tkinter progress window (stdlib only) drives the same in-process download:
+A minimal tkinter progress window (stdlib only) drives the same in-process download.
+**GUI is the default:** no args opens an idle window. The `gui` subcommand remains
+an explicit alias. Headless scripts must say `download` (the old bare-path-as-download
+shortcut is gone).
 
 ```powershell
+python -m cbtorrent
 python -m cbtorrent gui
+python -m cbtorrent example.torrent --output downloads/example.bin --peer 127.0.0.1:6881 --no-trackers
 python -m cbtorrent gui example.torrent --output downloads/example.bin --peer 127.0.0.1:6881 --no-trackers
 ```
+
+A bare `.torrent` path opens the GUI preloaded with that torrent (honoring
+`--output` / `--peer` / `--policy` / `--no-trackers` and other gui flags). Without
+a display or tkinter, the process exits non-zero and points you at
+`cbtorrent download` — there is no silent CLI fallback.
 
 Toolbar: **Add torrent…**, policy menu (heuristic default), **Start** / **Stop**.
 Shows piece progress, down/up rates, peer count, ETA, and a peer list. Esc stops
@@ -85,7 +98,7 @@ on completion; use `seed` to continue sharing afterward.
 - Incoming upload listener during downloads and a standalone seed server.
 - HTTP(S)/UDP trackers; explicit peers; JSON metrics and peer policies.
 - Opt-in adaptive / optimistic / recovery / timed policies; heuristic remains default.
-- Desktop GUI (`cbtorrent gui`) with live observe snapshots.
+- Desktop GUI by default (`cbtorrent` / `cbtorrent gui`) with live observe snapshots.
 
 See `benchmarks/` for policy experiment docs and held-out results. Run
 `python -m cbtorrent download --help` for tuning options.

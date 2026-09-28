@@ -81,6 +81,10 @@ class SnapshotTests(unittest.TestCase):
 
 
 class GuiCliTests(unittest.TestCase):
+    def _parse(self, argv):
+        from cbtorrent.__main__ import build_parser, normalize_argv
+        return build_parser().parse_args(normalize_argv(argv))
+
     def test_gui_help_without_display(self):
         from cbtorrent.__main__ import build_parser
         parser = build_parser()
@@ -97,6 +101,38 @@ class GuiCliTests(unittest.TestCase):
         self.assertEqual(empty.command, "gui")
         self.assertIsNone(empty.torrent)
         self.assertIsNone(empty.output)
+
+    def test_empty_argv_defaults_to_gui(self):
+        args = self._parse([])
+        self.assertEqual(args.command, "gui")
+        self.assertIsNone(args.torrent)
+
+    def test_bare_torrent_opens_gui(self):
+        args = self._parse(["foo.torrent"])
+        self.assertEqual(args.command, "gui")
+        self.assertEqual(str(args.torrent), "foo.torrent")
+
+    def test_bare_torrent_honors_gui_flags(self):
+        args = self._parse([
+            "foo.torrent", "--output", "out", "--peer", "127.0.0.1:6881",
+        ])
+        self.assertEqual(args.command, "gui")
+        self.assertEqual(str(args.torrent), "foo.torrent")
+        self.assertEqual(str(args.output), "out")
+        self.assertEqual(args.peer, [("127.0.0.1", 6881)])
+
+    def test_explicit_download_still_download(self):
+        args = self._parse([
+            "download", "foo.torrent", "--output", "out.bin",
+        ])
+        self.assertEqual(args.command, "download")
+        self.assertEqual(str(args.torrent), "foo.torrent")
+        self.assertEqual(str(args.output), "out.bin")
+
+    def test_explicit_gui_still_gui(self):
+        args = self._parse(["gui"])
+        self.assertEqual(args.command, "gui")
+        self.assertIsNone(args.torrent)
 
     def test_gui_package_imports_without_tkinter(self):
         # Controller and observe must not require a display.
