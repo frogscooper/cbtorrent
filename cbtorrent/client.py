@@ -255,7 +255,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         await asyncio.gather(*tasks, return_exceptions=True)
         tasks.clear()
         await server.close()
-        storage.publish()
+        await storage.publish_async()
         result = report(complete=True)
         emit(status="complete")
         if started_trackers:

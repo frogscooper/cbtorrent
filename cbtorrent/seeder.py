@@ -3,24 +3,39 @@ import asyncio
 import math
 import os
 import struct
+from bisect import bisect_right
 from collections import deque
 from hashlib import sha1
 from pathlib import Path
 
 from .metrics import Metrics
+from .filepaths import open_payload, reject_symlinks
 from .wire import BLOCK_SIZE, PROTOCOL, Peer, message
 
 
 class FileSource:
     def __init__(self, torrent, path):
         self.torrent = torrent
-        self.stream = Path(path).open("rb")
+        self.path = Path(path)
+        self.stream = None
+        self.ends = tuple(f.offset + f.length for f in torrent.files)
         self.verified = set()
         try:
-            if os.fstat(self.stream.fileno()).st_size != torrent.length:
-                raise ValueError("seed file size does not match torrent")
+            if torrent.multi_file:
+                reject_symlinks(self.path)
+                if not self.path.is_dir():
+                    raise ValueError("multi-file seed source must be a directory")
+                for file in torrent.files:
+                    with open_payload(self.path.joinpath(*file.path)) as stream:
+                        if os.fstat(stream.fileno()).st_size != file.length:
+                            raise ValueError("seed file size does not match torrent")
+            else:
+                self.stream = self.path.open("rb")
+                if os.fstat(self.stream.fileno()).st_size != torrent.length:
+                    raise ValueError("seed file size does not match torrent")
             for index, expected in enumerate(torrent.hashes):
-                if sha1(self.stream.read(torrent.piece_size(index))).digest() != expected:
+                data = self._read_at(index * torrent.piece_length, torrent.piece_size(index))
+                if sha1(data).digest() != expected:
                     raise ValueError(f"seed file failed hash check at piece {index}")
                 self.verified.add(index)
         except BaseException:
@@ -32,14 +47,38 @@ class FileSource:
             raise ValueError("invalid or unavailable seed block")
         if offset + length > self.torrent.piece_size(index):
             raise ValueError("seed request crosses piece boundary")
-        self.stream.seek(index * self.torrent.piece_length + offset)
-        data = self.stream.read(length)
+        data = self._read_at(index * self.torrent.piece_length + offset, length)
         if len(data) != length:
             raise OSError("seed file changed during transfer")
         return data
 
+    def _read_at(self, start, length):
+        if not self.torrent.multi_file:
+            self.stream.seek(start)
+            return self.stream.read(length)
+        # Zero-length files have repeated ends. bisect_right skips them and
+        # finds the first file containing this byte without scanning the list.
+        index = bisect_right(self.ends, start)
+        data = bytearray()
+        while len(data) < length and index < len(self.torrent.files):
+            file = self.torrent.files[index]
+            take = min(length - len(data), file.offset + file.length - start)
+            if take:
+                with open_payload(self.path.joinpath(*file.path)) as stream:
+                    if os.fstat(stream.fileno()).st_size != file.length:
+                        raise OSError("seed file changed during transfer")
+                    stream.seek(start - file.offset)
+                    block = stream.read(take)
+                    if len(block) != take:
+                        raise OSError("seed file changed during transfer")
+                    data.extend(block)
+                start += take
+            index += 1
+        return bytes(data)
+
     def close(self):
-        self.stream.close()
+        if self.stream is not None:
+            self.stream.close()
 
 
 class SeedServer:
