@@ -14,7 +14,7 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
         resume=False, use_trackers=True, listen_host="0.0.0.0", listen_port=0,
         timeout=15.0, piece_timeout=120.0, pipeline=8, concurrency=4,
         max_connections=16, policy_name="heuristic",
-        session_path: Path | None = None):
+        session_path: Path | None = None, use_dht=True, dht_bootstrap=None):
     _NO_DISPLAY = (
         "Desktop GUI needs a display and tkinter. Install the OS tk package "
         "(e.g. python3-tk) or use `cbtorrent download` instead."
@@ -35,6 +35,7 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
     selected_id: list[str | None] = [None]
     download_opts = dict(
         peers=list(peers), resume=resume, use_trackers=use_trackers,
+        use_dht=use_dht, dht_bootstrap=dht_bootstrap,
         listen_host=listen_host, listen_port=listen_port, timeout=timeout,
         piece_timeout=piece_timeout, pipeline=pipeline, concurrency=concurrency,
         max_connections=max_connections,
@@ -239,6 +240,7 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
             controller.start(
                 meta, download_opts["peers"], output_path, resume=use_resume,
                 use_trackers=download_opts["use_trackers"],
+                use_dht=download_opts["use_dht"], dht_bootstrap=download_opts["dht_bootstrap"],
                 listen_host=download_opts["listen_host"],
                 listen_port=download_opts["listen_port"],
                 timeout=download_opts["timeout"],
