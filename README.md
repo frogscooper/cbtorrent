@@ -57,15 +57,26 @@ python -m cbtorrent gui example.torrent --output downloads/example.bin --peer 12
 If there is no display, no tkinter, or `Tk()` fails, the process exits non-zero and
 points you at `cbtorrent download`. There is no silent CLI fallback.
 
-Toolbar: **Add** | **Remove** | **Pause** | **Resume** | **Policy** (heuristic is the
-default for new torrents and the session). Upper pane is the queue
-(`#` | Name | Progress | ↓ | ↑ | Status) in session order. Selecting a row shows
-detail: progress bar, rates, peers. Esc pauses the selected downloading torrent and
-keeps the `.part` file. At most one download runs at a time.
+Toolbar: **Add** | **Remove** | **Pause** | **Resume** | **Policy**, with
+**Start Queue**, **Stop Queue**, **Move Up**, and **Move Down** below it.
+The upper pane shows the queue in session order. Selecting a row shows its
+progress, rates, and peers. At most one download runs at a time.
 
-Queue and status persist to `~/.cbtorrent/session.json` (Windows:
-`%USERPROFILE%\.cbtorrent\session.json`). On open, the GUI restores the queue and
-auto-resumes at most one torrent that was downloading.
+**Start Queue** runs eligible queued torrents in order and advances after each
+completion. It skips paused, failed, and completed items. A failure stops the
+queue for review. **Stop Queue** cancels the active transfer and leaves it queued
+with its `.part` file, ready for the next Start Queue. **Pause** (or Esc) stops the
+queue and leaves the selected active item paused. **Resume** starts the selected
+item; it cannot interrupt another active download. Removing the active item also
+stops the queue. Move Up/Down changes the order of subsequent downloads.
+
+Queue order, item status, policy, and the queue's running state persist to
+`~/.cbtorrent/session.json` (Windows: `%USERPROFILE%\.cbtorrent\session.json`).
+Closing a running queue keeps its intent: on reopening, the interrupted item
+resumes first, then the remaining queue continues. Closing a manual download
+leaves it paused. A stopped queue stays stopped. Existing version 1 session files
+remain readable; their saved downloading item resumes as before, without enabling
+automatic queue advancement. Resumed pieces are always rehashed before use.
 
 ### Headless download
 
