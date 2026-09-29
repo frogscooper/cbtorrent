@@ -80,7 +80,7 @@ automatic queue advancement. Resumed pieces are always rehashed before use.
 
 ### Headless download
 
-Single-file v1 torrents only.
+Single-file and multi-file BitTorrent v1 torrents are supported.
 
 ```bash
 python -m cbtorrent download example.torrent --output downloads/example.bin --progress
@@ -104,6 +104,48 @@ Ctrl+C closes sockets and keeps partial work.
 While downloading, the client listens on `0.0.0.0` with an ephemeral port and shares
 verified pieces with incoming peers. Use `--port 6881` for a stable announced port, or
 `--listen-host 127.0.0.1` for local experiments. There is no automatic NAT mapping.
+
+### Multi-file directories
+
+`create` accepts a directory and streams its files in sorted relative-path order.
+Pieces can span files; zero-length files are included. Empty directories are not
+represented in v1 metainfo, and a source directory must contain at least one file.
+
+```sh
+python -m cbtorrent create my-folder --output folder.torrent
+python -m cbtorrent inspect folder.torrent
+python -m cbtorrent download folder.torrent --output downloads/my-folder --progress
+python -m cbtorrent seed folder.torrent --file downloads/my-folder
+```
+
+For a multi-file torrent, `--output` is the new directory containing the manifest
+paths, and `seed --file` points directly to that directory. `inspect` lists each
+file's path, length, and byte offset. The GUI downloads every file by default to
+`downloads/<torrent-name>` and shows the file count in the selected torrent's
+heading. Per-file selection is not implemented.
+
+Downloads use a single `<output>.part` spool for the concatenated payload.
+Resume rehashes its pieces, including pieces crossing file boundaries. At
+completion, verified data is copied to a private staging directory, then linked
+into an exclusively created destination directory. Existing destinations,
+including empty directories, are refused. This requires hard-link support and
+roughly twice the payload size in free disk space during publication. Copying
+and linking yield between chunks/files so cancellation can clean up normally.
+
+Publication of an entire directory is not atomic. A normal failure or cancellation
+removes entries created by that attempt and retains the verified spool. A process
+crash or power loss during publication can leave an incomplete destination or
+staging directory. Move that destination aside before resuming from `.part`;
+the client never merges into or overwrites an existing directory.
+
+Manifest paths must be relative UTF-8 components. Traversal, separators within
+components, Windows device names, and duplicate, case/Unicode-equivalent or
+file/directory-conflicting targets are rejected. Multi-file sources and payload
+paths refuse symlinks and Windows reparse points. Limits are 10,000 files,
+64 components per path, 16 MiB metainfo, and the existing 16 MiB piece cap.
+Local payloads must not be modified by another process while creating, downloading,
+publishing, or seeding. Seeding validates all file lengths and piece hashes before
+advertising availability, using at most one open payload file at a time.
 
 ### Create, inspect, seed
 
@@ -202,7 +244,7 @@ public churn, or disk contention. Do not treat a localhost win as a public-swarm
 
 ## Implemented
 
-- Bounded bencoding; single-file v1 metainfo; canonical info hashing
+- Bounded bencoding; single-file and multi-file v1 metainfo; canonical info hashing
 - TCP handshake, bitfield/have, choke, pipelined 16 KiB requests
 - Concurrent pieces, rarest-first among known peers, bounded connection cache, safe resume
 - Incoming upload listener during downloads; standalone seed server
@@ -218,7 +260,7 @@ the first 8 unique tracker URLs. Incoming clients use a separate cap equal to
 
 ## Limits
 
-Not present: magnet links, PEX, uTP, encryption, multi-file or v2 torrents, endgame
+Not present: magnet links, PEX, uTP, encryption, v2 torrents, endgame
 duplication, automatic NAT mapping, classic tit-for-tat upload slots. Outbound connections
 are download-oriented; uploads use the incoming listener. Peers retired after failure are
 not retried in that run. Storage and hashing run on the event loop. Publication uses an

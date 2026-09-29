@@ -175,7 +175,7 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
             return
         meta = load_meta(item)
         name = meta.name if meta is not None else item.torrent_path.name
-        header_var.set(name)
+        header_var.set(f"{name} ({len(meta.files)} files)" if meta and meta.multi_file else name)
         root.title(f"cbtorrent: {name}")
         if item.id == controller.active_id and snap is not None:
             bar["value"] = snap.percent

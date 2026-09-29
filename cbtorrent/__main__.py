@@ -98,7 +98,8 @@ def build_parser():
     get = commands.add_parser("download", help="download and share verified pieces")
     get.add_argument("torrent", type=Path)
     get.add_argument("--peer", type=endpoint, action="append", default=[])
-    get.add_argument("--output", type=Path, required=True)
+    get.add_argument("--output", type=Path, required=True,
+                     help="destination file, or new root directory for a multi-file torrent")
     get.add_argument("--timeout", type=float, default=15.0)
     get.add_argument("--piece-timeout", type=float, default=120.0)
     get.add_argument("--pipeline", type=int, default=8)
@@ -111,14 +112,15 @@ def build_parser():
     get.add_argument("--port", type=int, default=0)
     get.add_argument("--progress", action="store_true")
     get.add_argument("--report", type=Path)
-    seed = commands.add_parser("seed", help="verify and seed a complete file until Ctrl+C")
+    seed = commands.add_parser("seed", help="verify and seed a file or directory until Ctrl+C")
     seed.add_argument("torrent", type=Path)
-    seed.add_argument("--file", type=Path, required=True)
+    seed.add_argument("--file", type=Path, required=True,
+                      help="complete file, or root directory containing the torrent files")
     seed.add_argument("--listen-host", default="0.0.0.0")
     seed.add_argument("--port", type=int, default=6881)
     seed.add_argument("--max-clients", type=int, default=32)
     seed.add_argument("--no-trackers", action="store_true")
-    make = commands.add_parser("create", help="create single-file v1 torrent metadata")
+    make = commands.add_parser("create", help="create v1 torrent metadata from a file or directory")
     make.add_argument("file", type=Path)
     make.add_argument("--output", type=Path, required=True)
     make.add_argument("--tracker", action="append", default=[])
@@ -211,6 +213,9 @@ def main(argv=None):
             report = dict(name=torrent.name, length=torrent.length, piece_length=torrent.piece_length,
                           pieces=len(torrent.hashes), info_hash=torrent.info_hash.hex(), trackers=torrent.trackers,
                           private=torrent.private, nodes=torrent.nodes)
+            if torrent.multi_file:
+                report["files"] = [dict(path="/".join(f.path), length=f.length, offset=f.offset)
+                                   for f in torrent.files]
         else:
             def progress(scenario, trial, policy, metrics):
                 print(f"{scenario} trial {trial} {policy}: {metrics['elapsed_seconds']:.3f}s", file=sys.stderr)

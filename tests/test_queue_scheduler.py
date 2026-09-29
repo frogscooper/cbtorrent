@@ -261,7 +261,7 @@ class ControllerCancellationTests(unittest.TestCase):
 
 
 class QueueTransferTests(unittest.IsolatedAsyncioTestCase):
-    async def test_three_real_downloads_advance_and_verify_in_order(self):
+    async def test_mixed_file_and_directory_downloads_advance_and_verify_in_order(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             session = Session(root / "session.json")
@@ -272,7 +272,13 @@ class QueueTransferTests(unittest.IsolatedAsyncioTestCase):
                 for n in range(3):
                     path = root / f"source{n}"
                     data = bytes([n]) * 70000
-                    path.write_bytes(data)
+                    if n == 1:
+                        (path / "nested").mkdir(parents=True)
+                        (path / "first").write_bytes(data[:17000])
+                        (path / "nested" / "rest").write_bytes(data[17000:])
+                        (path / "nested" / "zero").write_bytes(b"")
+                    else:
+                        path.write_bytes(data)
                     torrent = root / f"{n}.torrent"
                     meta = create(path, torrent, piece_length=32768)
                     item = session.add(torrent, root / f"out{n}")
@@ -301,7 +307,13 @@ class QueueTransferTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(started, [item.id for item in session.items()])
                 for item in session.items():
                     self.assertEqual(item.status, "complete")
-                    self.assertEqual(item.output.read_bytes(), expected[item.id])
+                    if metas[item.id].multi_file:
+                        self.assertEqual((item.output / "first").read_bytes(), expected[item.id][:17000])
+                        self.assertEqual((item.output / "nested" / "rest").read_bytes(), expected[item.id][17000:])
+                        self.assertEqual((item.output / "nested" / "zero").read_bytes(), b"")
+                    else:
+                        self.assertEqual(item.output.read_bytes(), expected[item.id])
+                    self.assertFalse(item.output.with_name(item.output.name + ".part").exists())
             finally:
                 controller.cancel()
                 await asyncio.to_thread(controller.join, 3)

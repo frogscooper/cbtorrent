@@ -289,7 +289,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         if discovery is not None:
             await discovery.close()
         await server.close()
-        storage.publish()
+        await storage.publish_async()
         result = report(complete=True)
         emit(status="complete")
         if started_trackers:
