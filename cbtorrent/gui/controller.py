@@ -45,7 +45,7 @@ class DownloadController:
     def start(self, torrent: Torrent, peers, output: Path, *, resume=False,
               use_trackers=True, listen_host="0.0.0.0", listen_port=0,
               timeout=15.0, piece_timeout=120.0, pipeline=8, concurrency=4,
-              max_connections=16, policy=None, item_id=None):
+              max_connections=16, policy=None, item_id=None, use_dht=False, dht_bootstrap=None):
         if self.busy:
             raise RuntimeError("download already running")
         self.output = Path(output)
@@ -70,6 +70,7 @@ class DownloadController:
                     piece_timeout=piece_timeout, pipeline=pipeline,
                     concurrency=concurrency, max_connections=max_connections,
                     resume=resume, policy=policy, use_trackers=use_trackers,
+                    use_dht=use_dht, dht_bootstrap=dht_bootstrap,
                     listen_host=listen_host, listen_port=listen_port,
                     observe=self._observe))
                 loop.run_until_complete(self._task)
