@@ -55,6 +55,8 @@ class Torrent:
     hashes: tuple[bytes, ...]
     info_hash: bytes
     trackers: tuple[str, ...] = ()
+    private: bool = False
+    nodes: tuple[tuple[str, int], ...] = ()
     files: tuple[TorrentFile, ...] = ()
 
     @property
@@ -84,6 +86,19 @@ class Torrent:
         if not isinstance(hashes, bytes) or len(hashes) != count * 20:
             raise ValueError("piece hash count does not match file length")
         safe_name = component(name)
+        private = info.get(b"private", 0)
+        if type(private) is not int or private not in (0, 1):
+            raise ValueError("private flag must be 0 or 1")
+        nodes = root.get(b"nodes", [])
+        if not isinstance(nodes, list) or len(nodes) > 8:
+            raise ValueError("torrent nodes must contain at most 8 bootstrap endpoints")
+        contacts = []
+        for node in nodes:
+            if (not isinstance(node, list) or len(node) != 2
+                    or not isinstance(node[0], bytes) or not 1 <= len(node[0]) <= 253
+                    or type(node[1]) is not int or not 1 <= node[1] <= 65535):
+                raise ValueError("invalid torrent bootstrap node")
+            contacts.append((node[0].decode("utf-8"), node[1]))
         trackers = []
         announce = root.get(b"announce")
         tiers = root.get(b"announce-list", [])
@@ -102,7 +117,8 @@ class Torrent:
             trackers.append(announce.decode("utf-8"))
         return cls(safe_name, length, piece_length,
                    tuple(hashes[i:i + 20] for i in range(0, len(hashes), 20)),
-                   sha1(encode(info)).digest(), tuple(dict.fromkeys(trackers)), files)
+                   sha1(encode(info)).digest(), tuple(dict.fromkeys(trackers)),
+                   private=bool(private), nodes=tuple(dict.fromkeys(contacts)), files=files)
 
     @classmethod
     def load(cls, path: Path):
@@ -115,7 +131,7 @@ class Torrent:
         return min(self.piece_length, self.length - index * self.piece_length)
 
 
-def create(source: Path, destination: Path, *, piece_length=256 * 1024, trackers=()):
+def create(source: Path, destination: Path, *, piece_length=256 * 1024, trackers=(), nodes=()):
     """Create v1 metainfo for a file or directory using a bounded piece buffer."""
     if not 1 <= piece_length <= 16 * 1024 * 1024:
         raise ValueError("piece length must be between 1 byte and 16 MiB")
@@ -177,6 +193,8 @@ def create(source: Path, destination: Path, *, piece_length=256 * 1024, trackers
     if trackers:
         root[b"announce"] = trackers[0].encode("utf-8")
         root[b"announce-list"] = [[url.encode("utf-8")] for url in trackers]
+    if nodes:
+        root[b"nodes"] = [[host.encode("utf-8"), port] for host, port in nodes]
     raw = encode(root)
     torrent = Torrent.from_bytes(raw)
     with destination.open("xb") as stream:

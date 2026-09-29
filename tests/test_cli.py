@@ -31,7 +31,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(info["length"], len(content))
             seed = await asyncio.create_subprocess_exec(
                 sys.executable, "-m", "cbtorrent", "seed", str(torrent), "--file", str(source),
-                "--listen-host", "127.0.0.1", "--port", "0", "--no-trackers",
+                "--listen-host", "127.0.0.1", "--port", "0", "--no-trackers", "--no-dht",
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             try:
                 line = await asyncio.wait_for(seed.stdout.readline(), 10)
@@ -42,7 +42,7 @@ class CommandTests(unittest.IsolatedAsyncioTestCase):
                         report_path = root / "reports" / f"{policy}.json"
                         target = output.with_name(policy)
                         report = json.loads(await self.command(
-                            "download", torrent, "--peer", f"127.0.0.1:{port}", "--no-trackers",
+                            "download", torrent, "--peer", f"127.0.0.1:{port}", "--no-trackers", "--no-dht",
                             "--output", target, "--listen-host", "127.0.0.1", "--policy", policy,
                             "--report", report_path))
                         self.assertEqual(target.read_bytes(), content)

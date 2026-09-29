@@ -8,6 +8,7 @@ from pathlib import Path
 from time import perf_counter
 
 from .metrics import Metrics
+from .dht import DhtDiscovery
 from .observe import build_snapshot
 from .policy import ActiveTransfer, Observation, SchedulingContext, ThroughputPolicy
 from .seeder import SeedServer
@@ -25,7 +26,8 @@ class DownloadError(Exception):
 async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=120.0,
                    pipeline=8, policy=None, concurrency=4, max_connections=16,
                    resume=False, use_trackers=True, listen_host="127.0.0.1",
-                   listen_port=0, progress=None, observe=None):
+                   listen_port=0, progress=None, observe=None,
+                   use_dht=False, dht_bootstrap=None):
     """Each task owns one connection and reserves at most one piece.
 
     Storage operations run on the event loop, preventing shared seek races.
@@ -55,6 +57,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
     peer_errors, tracker_errors = [], []
     peer_id = b"-CB0002-" + os.urandom(12)
     storage = server = tracker_task = None
+    discovery = None
     tracker_urls = torrent.trackers[:8] if use_trackers else ()
     started_trackers = set()
     intervals = {}
@@ -67,6 +70,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                                        for (host, peer_port), value in observations.items()}
         result["peer_errors"] = list(peer_errors)
         result["tracker_errors"] = list(tracker_errors)
+        result["dht_errors"] = list(discovery.errors) if discovery else []
         if hasattr(policy, "diagnostics"):
             result["policy_diagnostics"] = policy.diagnostics()
         return result
@@ -198,6 +202,15 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         server = SeedServer(torrent, storage, metrics=metrics, peer_id=peer_id,
                             timeout=timeout, max_clients=max_connections)
         port = await server.start(listen_host, listen_port)
+        if remaining and use_dht and not torrent.private:
+            def found_peers(addresses):
+                for address in addresses:
+                    if address not in peers and len(peers) < 200:
+                        peers.append(address)
+            discovery = DhtDiscovery(torrent, port, metrics, bootstrap=dht_bootstrap,
+                                     timeout=min(timeout, 15.0), on_peers=found_peers,
+                                     bind_host=listen_host)
+            discovery.start()
         if remaining and tracker_urls:
             await asyncio.gather(*(tracker_update(url, "started") for url in tracker_urls))
             tracker_task = asyncio.create_task(refresh_trackers())
@@ -244,9 +257,28 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 tasks[task] = address
                 busy.add(address)
             if not tasks:
+                if discovery is not None and not discovery.first_done.is_set():
+                    await discovery.changed.wait()
+                    discovery.changed.clear()
+                    continue
                 raise ConnectionError("no usable peers remain; partial download can be resumed")
-            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED,
-                                         timeout=0.05 if deferred else None)
+            # New discovery results can fill free slots while existing peers
+            # are still connecting or stalled. Drain the event waiter on every
+            # exit so cancellation never leaves an orphan task behind.
+            wake = asyncio.create_task(discovery.changed.wait()) if discovery else None
+            try:
+                waiting = set(tasks)
+                if wake is not None:
+                    waiting.add(wake)
+                done, _ = await asyncio.wait(waiting, return_when=asyncio.FIRST_COMPLETED,
+                                             timeout=0.05 if deferred else None)
+                if wake in done:
+                    discovery.changed.clear()
+                    done.remove(wake)
+            finally:
+                if wake is not None:
+                    wake.cancel()
+                    await asyncio.gather(wake, return_exceptions=True)
             for task in done:
                 del tasks[task]
                 task.result()
@@ -254,6 +286,8 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         tasks.clear()
+        if discovery is not None:
+            await discovery.close()
         await server.close()
         await storage.publish_async()
         result = report(complete=True)
@@ -268,6 +302,8 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         emit(status="cancelled")
         raise
     finally:
+        if discovery is not None:
+            await discovery.close()
         if tracker_task is not None:
             tracker_task.cancel()
             await asyncio.gather(tracker_task, return_exceptions=True)

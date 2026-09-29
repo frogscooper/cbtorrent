@@ -79,7 +79,7 @@ Explicit peers, an opt-in policy, and a metrics report:
 
 ```bash
 python -m cbtorrent download example.torrent \
-  --peer 127.0.0.1:6881 --no-trackers \
+  --peer 127.0.0.1:6881 --no-trackers --no-dht \
   --output downloads/example.bin \
   --policy bandit \
   --report reports/run-01.json
@@ -145,10 +145,64 @@ python -m cbtorrent seed sample.torrent --file sample.bin --port 6881
 ```
 
 Local two-terminal smoke test: omit `--tracker` when creating, seed with
-`--listen-host 127.0.0.1 --no-trackers`, then download with
-`--peer 127.0.0.1:6881 --no-trackers` to a different output path. `seed` verifies the
+`--listen-host 127.0.0.1 --no-trackers --no-dht`, then download with
+`--peer 127.0.0.1:6881 --no-trackers --no-dht` to a different output path. `seed` verifies the
 complete file before serving and runs until Ctrl+C. A download exits when the file is
 done; keep seeding with `seed` if you want to stay available.
+
+### DHT discovery
+
+The CLI and desktop GUI enable IPv4 DHT for public torrents. It discovers peers
+by info hash and announces the verified-piece listener's **TCP** port, using
+[BEP 5](https://www.bittorrent.org/beps/bep_0005.html) `get_peers` and
+`announce_peer`. Trackers and explicit peers remain available when DHT fails.
+New peers enter the same bounded scheduler and hash verification as tracker peers.
+
+```bash
+python -m cbtorrent download example.torrent --output downloads/example.bin --no-trackers
+python -m cbtorrent seed example.torrent --file downloads/example.bin --no-trackers
+```
+
+Use `--no-dht` on `download`, `seed`, or `gui` to disable it. **`--no-trackers`
+alone does not disable DHT.** `--dht-bootstrap HOST:PORT` is repeatable and replaces
+all default bootstrap endpoints. Otherwise, the torrent's `nodes` contacts are
+used when present, falling back to `dht.transmissionbt.com:6881` and
+`router.utorrent.com:6881`. `create --node HOST:PORT` embeds an explicit bootstrap
+contact without adding built-in public routers to generated torrents.
+The Python `download()` API preserves its prior network behavior: opt in with
+`use_dht=True`; `dht_bootstrap=[]` disables bootstrap DNS entirely. Policy benchmarks
+explicitly disable DHT, and DHT tests use only local UDP/TCP fixtures.
+
+DHT starts alongside downloads and refreshes every five minutes. A download with
+no usable peers waits for the initial lookup, bounded by the smaller of `--timeout`
+and 15 seconds, then reports failure if none are usable. Existing transfers do not
+wait for DHT. The node uses an ephemeral UDP port on `--listen-host`; announcements
+use the separately bound TCP port. Both sockets close on completion or cancellation.
+An IPv6-only listening address leaves IPv4 DHT unavailable; explicit IPv6 peers and
+trackers still work. There is no automatic NAT mapping.
+
+Replies must match both the transaction and source endpoint. Announces require a
+secret, expiring token bound to the source IP and info hash. Requests and replies
+are capped at 1200 bytes; lookups cap referrals at 64, queries at 32, parallel lookup
+queries at 3, and collected peers at 200. A node has at most 8 pending requests,
+256 routing contacts, and 128 stored info hashes with 50 peers each. Incoming query
+replies are limited to 50 per second with a burst of 100. Routing contacts expire
+after 15 minutes and announced peers after 30 minutes. Cancellation drains pending
+queries; a lookup deadline retains any peers already discovered.
+
+Metainfo with `info.private=1` never starts DHT or announces its hash through it,
+as required by [BEP 27](https://www.bittorrent.org/beps/bep_0027.html). This does not
+claim full private-tracker support: tracker-tier switching and tracker-only peer
+provenance enforcement are still outside this implementation.
+
+Reports add `dht_sent_bytes` and `dht_received_bytes` for UDP payload bytes, including
+unmatched/malformed received datagrams; IP/UDP headers and DNS traffic are excluded.
+`dht_requests` counts sent queries, `dht_failures` counts failed queries, DNS/bind
+failures and whole-lookup deadline expirations (these can overlap), and `dht_peers`
+counts unique peers per lookup, including peers already seen in previous lookups.
+`dht_errors` contains setup errors. Existing `wire_*` and `protocol_overhead_bytes`
+retain their peer-TCP-only meanings; DHT overhead is separate. Completion time
+includes any initial wait for discovery.
 
 ## Peer policies
 
@@ -184,6 +238,7 @@ public churn, or disk contention. Do not treat a localhost win as a public-swarm
 - Concurrent pieces, rarest-first among known peers, bounded connection cache, safe resume
 - Incoming upload listener during downloads; standalone seed server
 - HTTP(S) and IPv4 UDP trackers; explicit IPv4/IPv6 peers
+- Bounded IPv4 DHT discovery, announcements, and KRPC query responses
 - JSON metrics and per-peer observations
 - Desktop GUI as the default launch path with multi-torrent queue and session persistence; headless subcommands for scripts and CI
 
@@ -194,13 +249,18 @@ the first 8 unique tracker URLs. Incoming clients use a separate cap equal to
 
 ## Limits
 
-Not present: magnet links, DHT, PEX, uTP, encryption, v2 torrents, endgame
+Not present: magnet links, PEX, uTP, encryption, v2 torrents, endgame
 duplication, automatic NAT mapping, classic tit-for-tat upload slots. Outbound connections
 are download-oriented; uploads use the incoming listener. Peers retired after failure are
 not retried in that run. Storage and hashing run on the event loop. Publication uses an
 exclusive hard link in the same directory when the filesystem supports it; otherwise the
 completed `.part` file remains. Local fixtures are validated; independent-client and
 public-swarm interoperability are still open work.
+
+DHT state is scoped to the running download/seed session. Persistent routing tables,
+full bucket refresh/replacement probing, BEP 42 node-ID hardening, IPv6 DHT, and TCP
+DHT `PORT` exchange are not implemented. This is a bounded discovery implementation,
+not a complete long-lived DHT router. Magnet metadata exchange is a separate feature.
 
 ## Contributing
 

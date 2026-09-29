@@ -209,7 +209,7 @@ async def run_benchmark(*, trials=3, size=1024 * 1024, seed=2026, progress=None,
                             output = root / f"{scenario}-{trial}-{name}.bin"
                             try:
                                 report = await download(torrent, peers, output, concurrency=config["concurrency"],
-                                                        policy=POLICIES[name](), use_trackers=False,
+                                                        policy=POLICIES[name](), use_trackers=False, use_dht=False,
                                                         timeout=3, piece_timeout=10)
                             except DownloadError as error:
                                 report = error.report

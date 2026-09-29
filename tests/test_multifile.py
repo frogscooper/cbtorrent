@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from cbtorrent.bencode import decode, encode
+from cbtorrent.dht import DhtNode
 from cbtorrent.client import DownloadError, download
 from cbtorrent.metainfo import Torrent, create
 from cbtorrent.seeder import FileSource, SeedServer
@@ -288,6 +289,43 @@ class TransferTests(Fixture, unittest.IsolatedAsyncioTestCase):
         self.assertTrue(report["complete"])
         self.assert_directory(second)
 
+    async def test_trackerless_dht_download_publishes_multifile_directory(self):
+        peer = await self.seed(self.source)
+        router = DhtNode(bootstrap=(), bind_host="127.0.0.1")
+        publisher = DhtNode(bootstrap=(), bind_host="127.0.0.1")
+        try:
+            await router.start()
+            await publisher.start()
+            address = ("127.0.0.1", router.port)
+            response = await publisher.query(address, b"get_peers", {b"info_hash": self.torrent.info_hash})
+            await publisher.query(address, b"announce_peer", {
+                b"info_hash": self.torrent.info_hash, b"port": peer[1], b"token": response[b"token"]})
+            report = await asyncio.wait_for(download(
+                self.torrent, [], self.output, use_trackers=False, use_dht=True,
+                dht_bootstrap=[address], timeout=2), 5)
+        finally:
+            await publisher.close()
+            await router.close()
+        self.assertTrue(report["complete"])
+        self.assertGreater(report["dht_peers"], 0)
+        self.assertEqual(report["tracker_requests"], 0)
+        self.assert_directory(self.output)
+
+    async def test_private_multifile_metadata_keeps_files_and_suppresses_dht(self):
+        root = decode(self.meta_path.read_bytes())
+        root[b"info"][b"private"] = 1
+        root[b"nodes"] = [[b"127.0.0.1", 1234]]
+        original_files = self.torrent.files
+        self.torrent = Torrent.from_bytes(encode(root))
+        self.assertTrue(self.torrent.private)
+        self.assertEqual(self.torrent.files, original_files)
+        self.assertEqual(self.torrent.nodes, (("127.0.0.1", 1234),))
+        peer = await self.seed(self.source)
+        with patch("cbtorrent.client.DhtDiscovery", side_effect=AssertionError("private DHT")):
+            report = await download(self.torrent, [peer], self.output, use_trackers=False, use_dht=True)
+        self.assertTrue(report["complete"])
+        self.assert_directory(self.output)
+
     async def test_incoming_upload_only_exposes_verified_cross_file_piece(self):
         storage = Storage(self.torrent, self.output)
         try:
@@ -366,13 +404,13 @@ class TransferTests(Fixture, unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(inspected["files"]), 4)
         process = await asyncio.create_subprocess_exec(
             os.sys.executable, "-m", "cbtorrent", "seed", str(cli_meta), "--file",
-            str(self.source), "--port", "0", "--listen-host", "127.0.0.1", "--no-trackers",
+            str(self.source), "--port", "0", "--listen-host", "127.0.0.1", "--no-trackers", "--no-dht",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         try:
             line = await asyncio.wait_for(process.stdout.readline(), 5)
             port = int(line.decode().strip().rsplit(":", 1)[1])
             await command("download", cli_meta, "--output", self.output,
-                          "--peer", f"127.0.0.1:{port}", "--no-trackers")
+                          "--peer", f"127.0.0.1:{port}", "--no-trackers", "--no-dht")
             self.assert_directory(self.output)
         finally:
             if process.returncode is None:

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .benchmark import run_benchmark
 from .client import DownloadError, download
+from .dht import DhtDiscovery
 from .metainfo import Torrent, create
 from .metrics import Metrics
 from .policy import (AdaptivePolicy, BanditPolicy, OptimisticPolicy, RecoveryPolicy,
@@ -34,6 +35,7 @@ async def seed_file(args):
     started = set()
     next_updates = {}
     port = 0
+    discovery = None
 
     async def update(url, event):
         try:
@@ -47,6 +49,10 @@ async def seed_file(args):
 
     try:
         port = await server.start(args.listen_host, args.port)
+        if not args.no_dht and not torrent.private:
+            discovery = DhtDiscovery(torrent, port, metrics,
+                                     bootstrap=args.dht_bootstrap, bind_host=args.listen_host)
+            discovery.start()
         print(f"Seeding {torrent.name} on {args.listen_host}:{port}", flush=True)
         urls = torrent.trackers[:8] if not args.no_trackers else ()
         await asyncio.gather(*(update(url, "started") for url in urls))
@@ -56,6 +62,8 @@ async def seed_file(args):
                 if next_updates[url] <= asyncio.get_running_loop().time():
                     await update(url, "" if url in started else "started")
     finally:
+        if discovery is not None:
+            await discovery.close()
         await server.close()
         source.close()
         if started:
@@ -116,6 +124,8 @@ def build_parser():
     make.add_argument("file", type=Path)
     make.add_argument("--output", type=Path, required=True)
     make.add_argument("--tracker", action="append", default=[])
+    make.add_argument("--node", type=endpoint, action="append", default=[],
+                      help="include a DHT bootstrap HOST:PORT in the torrent (repeatable)")
     make.add_argument("--piece-length", type=int, default=256 * 1024)
     info = commands.add_parser("inspect", help="show torrent metadata")
     info.add_argument("torrent", type=Path)
@@ -141,6 +151,10 @@ def build_parser():
     gui.add_argument("--no-trackers", action="store_true")
     gui.add_argument("--listen-host", default="0.0.0.0")
     gui.add_argument("--port", type=int, default=0)
+    for command in (get, seed, gui):
+        command.add_argument("--no-dht", action="store_true", help="disable IPv4 DHT discovery and announcements")
+        command.add_argument("--dht-bootstrap", type=endpoint, action="append", default=None,
+                             help="DHT bootstrap HOST:PORT (repeatable; replaces built-in bootstrap nodes)")
     return parser
 
 
@@ -166,6 +180,7 @@ def main(argv=None):
             return run_gui(
                 args.torrent, args.output, peers=args.peer, resume=args.resume,
                 use_trackers=not args.no_trackers, listen_host=args.listen_host,
+                use_dht=not args.no_dht, dht_bootstrap=args.dht_bootstrap,
                 listen_port=args.port, timeout=args.timeout,
                 piece_timeout=args.piece_timeout, pipeline=args.pipeline,
                 concurrency=args.concurrency, max_connections=args.max_connections,
@@ -182,19 +197,22 @@ def main(argv=None):
                 torrent, args.peer, args.output, timeout=args.timeout, piece_timeout=args.piece_timeout,
                 pipeline=args.pipeline, concurrency=args.concurrency, max_connections=args.max_connections,
                 resume=args.resume, policy=policy, use_trackers=not args.no_trackers,
+                use_dht=not args.no_dht, dht_bootstrap=args.dht_bootstrap,
                 listen_host=args.listen_host, listen_port=args.port,
                 progress=progress if args.progress else None))
         elif args.command == "seed":
             asyncio.run(seed_file(args))
             return 0
         elif args.command == "create":
-            torrent = create(args.file, args.output, piece_length=args.piece_length, trackers=args.tracker)
+            torrent = create(args.file, args.output, piece_length=args.piece_length,
+                             trackers=args.tracker, nodes=args.node)
             print(f"Created {args.output} ({torrent.info_hash.hex()})")
             return 0
         elif args.command == "inspect":
             torrent = Torrent.load(args.torrent)
             report = dict(name=torrent.name, length=torrent.length, piece_length=torrent.piece_length,
-                          pieces=len(torrent.hashes), info_hash=torrent.info_hash.hex(), trackers=torrent.trackers)
+                          pieces=len(torrent.hashes), info_hash=torrent.info_hash.hex(), trackers=torrent.trackers,
+                          private=torrent.private, nodes=torrent.nodes)
             if torrent.multi_file:
                 report["files"] = [dict(path="/".join(f.path), length=f.length, offset=f.offset)
                                    for f in torrent.files]
