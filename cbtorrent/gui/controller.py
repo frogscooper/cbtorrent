@@ -17,6 +17,7 @@ class DownloadController:
 
     def __init__(self):
         self._lock = threading.Lock()
+        self._cancel_requested = threading.Event()
         self._rates = RateTracker()
         self._snapshot: DownloadSnapshot | None = None
         self._thread: threading.Thread | None = None
@@ -48,6 +49,7 @@ class DownloadController:
               max_connections=16, policy=None, item_id=None, use_dht=False, dht_bootstrap=None):
         if self.busy:
             raise RuntimeError("download already running")
+        self._cancel_requested.clear()
         self.output = Path(output)
         self.active_id = item_id
         self._error = None
@@ -73,6 +75,8 @@ class DownloadController:
                     use_dht=use_dht, dht_bootstrap=dht_bootstrap,
                     listen_host=listen_host, listen_port=listen_port,
                     observe=self._observe))
+                if self._cancel_requested.is_set():
+                    self._task.cancel()
                 loop.run_until_complete(self._task)
             except asyncio.CancelledError:
                 current = self.snapshot
@@ -81,7 +85,7 @@ class DownloadController:
             except DownloadError as error:
                 self._error = str(error)
                 current = self.snapshot
-                if current is None or current.status == "running":
+                if current is None or current.status in ("starting", "running"):
                     self._set_snapshot(build_error_snapshot(torrent, error))
             except Exception as error:  # noqa: BLE001 - surface to UI
                 self._error = str(error)
@@ -103,9 +107,14 @@ class DownloadController:
         self._thread.start()
 
     def cancel(self):
+        self._cancel_requested.set()
         loop, task = self._loop, self._task
         if loop is not None and task is not None and not task.done():
-            loop.call_soon_threadsafe(task.cancel)
+            try:
+                loop.call_soon_threadsafe(task.cancel)
+            except RuntimeError:
+                # The worker can finish and close its loop between these checks.
+                pass
 
     def join(self, timeout=None):
         if self._thread is not None:

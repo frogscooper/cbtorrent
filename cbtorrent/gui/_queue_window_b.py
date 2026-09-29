@@ -70,40 +70,24 @@
     root.bind("<Escape>", pause_selected)
 
     def tick():
+        previous_active = scheduler.active_id
+        scheduler.poll()
         snap = controller.snapshot
-        active = controller.active_id
-        if active and session.get(active):
-            if snap is not None and snap.status == "complete":
-                session.set_status(active, "complete")
-            elif snap is not None and snap.status == "error":
-                session.set_status(active, "error")
-            elif snap is not None and snap.status == "cancelled":
-                if session.get(active) and session.get(active).status == "downloading":
-                    session.pause(active)
         refresh_ui()
         if controller.busy:
             if snap is not None and snap.status == "running":
                 set_status(f"Downloading {format_percent(snap.done_bytes, snap.length)}")
             elif snap is not None and snap.status == "starting":
                 set_status("Starting...")
-            root.after(250, tick)
-        else:
-            snap = controller.snapshot
-            if snap is not None and snap.status == "complete":
-                set_status("Complete")
-            elif snap is not None and snap.status == "error":
-                set_status(f"Error: {snap.error or 'download failed'}")
-            elif snap is not None and snap.status == "cancelled":
-                set_status("Paused: partial file kept as .part")
-            refresh_actions()
+        elif snap is not None and snap.status == "error":
+            set_status(f"Error: {snap.error or 'download failed'}")
+        elif previous_active and not session.queue_running:
+            set_status("Complete" if snap is not None and snap.status == "complete" else "Queue stopped")
+        root.after(250, tick)
 
     def on_close():
-        if controller.busy and controller.active_id:
-            controller.cancel()
-            controller.join(timeout=5)
-            if session.get(controller.active_id):
-                session.pause(controller.active_id)
-        session.save()
+        scheduler.close()
+        controller.join(timeout=5)
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_close)
@@ -126,9 +110,10 @@
     if auto and session.get(auto):
         if selected_id[0] is None:
             selected_id[0] = auto
-        start_item(session.get(auto), force_resume=True)
+        scheduler.resume(session.get(auto))
         refresh_ui()
 
+    root.after(100, tick)
     root.mainloop()
     controller.join(timeout=5)
     session.save()
