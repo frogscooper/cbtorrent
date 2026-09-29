@@ -8,6 +8,7 @@ from ..observe import format_eta, format_percent, format_rate
 from ..session import Session, default_session_path
 from .chrome import ACCENT, BG, MUTED, PANEL, POLICIES, TEXT
 from .controller import DownloadController
+from .scheduler import QueueScheduler
 
 def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
         resume=False, use_trackers=True, listen_host="0.0.0.0", listen_port=0,
@@ -113,10 +114,14 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
         remove_btn.state(["!disabled"] if has else ["disabled"])
         pause_btn.state(["!disabled"] if has and item.status == "downloading" else ["disabled"])
         can_resume = has and item.status in ("queued", "paused", "error")
-        if can_resume and busy and controller.active_id == item.id:
+        if can_resume and busy:
             can_resume = False
         resume_btn.state(["!disabled"] if can_resume else ["disabled"])
         policy_btn.state(["!disabled"])
+        start_queue_btn.state(["disabled"] if session.queue_running else ["!disabled"])
+        stop_queue_btn.state(["!disabled"] if session.queue_running or busy else ["disabled"])
+        move_up_btn.state(["!disabled"] if has else ["disabled"])
+        move_down_btn.state(["!disabled"] if has else ["disabled"])
 
     def paint_queue():
         snap = controller.snapshot
@@ -142,10 +147,12 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
                 queue.item(item.id, values=values)
             else:
                 queue.insert("", "end", iid=item.id, values=values)
+            queue.move(item.id, "", index - 1)
         for iid in existing - seen:
             queue.delete(iid)
         if selected_id[0] and selected_id[0] in seen:
-            queue.selection_set(selected_id[0])
+            if queue.selection() != (selected_id[0],):
+                queue.selection_set(selected_id[0])
             queue.focus(selected_id[0])
         elif selected_id[0] and selected_id[0] not in seen:
             selected_id[0] = None
@@ -207,41 +214,28 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
         selected_id[0] = selection[0] if selection else None
         refresh_ui()
 
-    def start_item(item, *, force_resume=None):
+    def start_item(item):
         meta = load_meta(item)
         if meta is None:
-            session.set_status(item.id, "error")
             set_status(f"Error: cannot load {item.torrent_path}")
-            refresh_ui()
-            return
-        if controller.busy:
-            if controller.active_id and controller.active_id != item.id:
-                controller.cancel()
-                controller.join(timeout=5)
-                if controller.active_id and session.get(controller.active_id):
-                    session.pause(controller.active_id)
-            else:
-                return
+            return False
         output_path = Path(item.output)
         part = output_path.with_name(output_path.name + ".part")
-        use_resume = force_resume if force_resume is not None else part.exists()
-        if output_path.exists() and not use_resume:
-            stem, suffix = output_path.stem, output_path.suffix
-            n = 1
-            while True:
-                candidate = output_path.with_name(f"{stem}-{n}{suffix}")
-                cand_part = candidate.with_name(candidate.name + ".part")
-                if not candidate.exists() and not cand_part.exists():
-                    output_path = candidate
-                    item.output = output_path
-                    session.save()
-                    break
-                n += 1
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        session.resume(item.id)
-        set_status("Downloading...")
-        refresh_ui()
+        use_resume = part.exists()
         try:
+            if output_path.exists() and not use_resume:
+                stem, suffix = output_path.stem, output_path.suffix
+                n = 1
+                while True:
+                    candidate = output_path.with_name(f"{stem}-{n}{suffix}")
+                    cand_part = candidate.with_name(candidate.name + ".part")
+                    if not candidate.exists() and not cand_part.exists():
+                        output_path = candidate
+                        item.output = output_path
+                        session.save()
+                        break
+                    n += 1
+            output_path.parent.mkdir(parents=True, exist_ok=True)
             controller.start(
                 meta, download_opts["peers"], output_path, resume=use_resume,
                 use_trackers=download_opts["use_trackers"],
@@ -255,11 +249,12 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
                 policy=POLICIES.get(item.policy, POLICIES["heuristic"])(),
                 item_id=item.id)
         except (OSError, ValueError, RuntimeError) as error:
-            session.set_status(item.id, "error")
             set_status(f"Error: {error}")
-            refresh_ui()
-            return
-        root.after(100, tick)
+            return False
+        set_status("Downloading...")
+        return True
+
+    scheduler = QueueScheduler(session, controller, start_item)
 
     def add_torrent(path: Path | None = None, output_path: Path | None = None,
                     select=True):
@@ -290,9 +285,7 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
             return
         if item.status == "downloading" or (
                 controller.busy and controller.active_id == item.id):
-            controller.cancel()
-            controller.join(timeout=5)
-            session.pause(item.id)
+            scheduler.stop(paused=True)
         session.remove(item.id)
         metas.pop(item.id, None)
         selected_id[0] = None
@@ -306,9 +299,7 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
         if item.status != "downloading" and not (
                 controller.busy and controller.active_id == item.id):
             return "break" if _event else None
-        if controller.busy and controller.active_id == item.id:
-            controller.cancel()
-            controller.join(timeout=5)
+        scheduler.stop(paused=True)
         session.pause(item.id)
         set_status("Paused: partial file kept as .part")
         refresh_ui()
@@ -321,7 +312,32 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
         if item.status == "complete":
             set_status("Already complete")
             return
-        start_item(item)
+        scheduler.resume(item)
+        refresh_ui()
+
+    def start_queue():
+        scheduler.start()
+        refresh_ui()
+
+    def stop_queue():
+        scheduler.stop()
+        set_status("Queue stopped: partial file kept")
+        refresh_ui()
+
+    def move_selected(direction):
+        item = selected_item()
+        if item is None:
+            return
+        ordered = session.items()
+        index = ordered.index(item)
+        target = index + direction
+        if 0 <= target < len(ordered):
+            if direction < 0:
+                before = ordered[target].id
+            else:
+                before = ordered[target + 1].id if target + 1 < len(ordered) else None
+            session.reorder(item.id, before)
+            refresh_ui()
 
     def choose_policy(name):
         session.set_default_policy(name)
@@ -349,4 +365,15 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
         policy_menu.add_command(label=name, command=lambda n=name: choose_policy(n))
     policy_btn["menu"] = policy_menu
     policy_btn.pack(side="left", padx=(8, 0))
+
+    queue_controls = ttk.Frame(outer)
+    queue_controls.pack(fill="x")
+    start_queue_btn = ttk.Button(queue_controls, text="Start Queue", command=start_queue)
+    start_queue_btn.pack(side="left")
+    stop_queue_btn = ttk.Button(queue_controls, text="Stop Queue", command=stop_queue)
+    stop_queue_btn.pack(side="left", padx=(8, 0))
+    move_up_btn = ttk.Button(queue_controls, text="Move Up", command=lambda: move_selected(-1))
+    move_up_btn.pack(side="left", padx=(8, 0))
+    move_down_btn = ttk.Button(queue_controls, text="Move Down", command=lambda: move_selected(1))
+    move_down_btn.pack(side="left", padx=(8, 0))
 
