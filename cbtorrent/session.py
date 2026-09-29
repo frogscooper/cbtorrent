@@ -58,6 +58,7 @@ class Session:
         self.path = Path(path) if path is not None else default_session_path()
         self.default_policy = default_policy or "heuristic"
         self._items: dict[str, QueueItem] = {}
+        self.queue_running = False
 
     def items(self) -> list[QueueItem]:
         return sorted(self._items.values(), key=lambda item: item.queue_order)
@@ -74,6 +75,7 @@ class Session:
     def load(self) -> int:
         """Load from disk. Keep at most one downloading intent (first in order)."""
         self._items.clear()
+        self.queue_running = False
         if not self.path.exists():
             return 0
         try:
@@ -84,6 +86,7 @@ class Session:
             return 0
         if isinstance(raw.get("default_policy"), str) and raw["default_policy"]:
             self.default_policy = raw["default_policy"]
+        self.queue_running = raw.get("queue_running") is True
         entries = raw.get("items") or []
         if not isinstance(entries, list):
             return 0
@@ -111,7 +114,8 @@ class Session:
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
-            "version": 1,
+            "version": 2,
+            "queue_running": self.queue_running,
             "default_policy": self.default_policy,
             "items": [item.to_dict() for item in self.items()],
         }
@@ -207,6 +211,10 @@ class Session:
         if status not in STATUSES:
             raise ValueError(f"invalid status: {status}")
         self._require(item_id).status = status
+        self.save()
+
+    def set_queue_running(self, running: bool) -> None:
+        self.queue_running = bool(running)
         self.save()
 
     def set_default_policy(self, name: str) -> None:
