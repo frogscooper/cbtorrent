@@ -110,3 +110,26 @@ and `download_piece()` in `wire.py`, then `tests/test_lifecycle.py`.
 
 **Try yourself:** Run the missing-block endgame test. Check its cancel message and
 why the helper requests one block rather than the whole piece.
+
+## [#16 — Peer exchange](https://github.com/frogscooper/cbtorrent/pull/16)
+
+**What changed:** Public downloads can learn peers from existing connections
+through BEP 11 peer exchange. This supplements explicit peers, trackers, and DHT;
+it does not replace piece verification or the scheduler's limits.
+
+**How it works:** Extension negotiation assigns separate metadata and PEX message
+numbers. A PEX message contains compact IP addresses and ports. The parser checks
+sizes, counts, flags, duplicates, and message rate. The session admits only a
+limited number of candidates per source and suggested IP. New hints wake the
+scheduler even while another peer is waiting. Outgoing updates describe successful
+outbound connections and include drops, at most once per minute.
+
+**Correctness:** Private torrents never enable PEX, and magnet metadata lookup
+waits until the private flag is known. A public source cannot redirect us into
+local networks. Hints cannot mark pieces verified or remove tracker peers.
+
+**Read first:** `pex.py`, `Peer.receive()` in `wire.py`, `make_pex()` in `client.py`,
+and `tests/test_pex.py`.
+
+**Try yourself:** Run the PEX-only discovery test. Follow how an empty bootstrap
+peer supplies an address that leads to a complete, hash-verified download.

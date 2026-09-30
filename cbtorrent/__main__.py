@@ -112,6 +112,7 @@ def build_parser():
     get.add_argument("--retry-delay", type=float, default=0.5,
                      help="initial retry backoff in seconds")
     get.add_argument("--no-endgame", action="store_true")
+    get.add_argument("--no-pex", action="store_true", help="disable peer exchange discovery")
     get.add_argument("--endgame-delay", type=float, default=1.0,
                      help="seconds without block progress before a tail helper")
     get.add_argument("--endgame-budget", type=int, default=131072,
@@ -215,6 +216,7 @@ def main(argv=None):
                 peer_retries=args.peer_retries, retry_delay=args.retry_delay,
                 endgame=not args.no_endgame, endgame_delay=args.endgame_delay,
                 endgame_budget=args.endgame_budget,
+                use_pex=not args.no_pex,
                 listen_host=args.listen_host, listen_port=args.port,
                 progress=progress if args.progress else None, **extra))
         elif args.command == "seed":

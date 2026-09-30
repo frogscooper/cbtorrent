@@ -11,6 +11,7 @@ from .metrics import Metrics
 from .dht import DhtDiscovery
 from .observe import build_snapshot
 from .policy import ActiveTransfer, Observation, SchedulingContext, ThroughputPolicy
+from .pex import PexSession
 from .seeder import SeedServer
 from .storage import Storage
 from .tracker import announce
@@ -32,7 +33,8 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                    resume=False, use_trackers=True, listen_host="127.0.0.1",
                    listen_port=0, progress=None, observe=None,
                    use_dht=False, dht_bootstrap=None, peer_retries=2, retry_delay=0.5,
-                   endgame=True, endgame_delay=1.0, endgame_budget=128 * 1024):
+                   endgame=True, endgame_delay=1.0, endgame_budget=128 * 1024,
+                   use_pex=True):
     """Each task owns one connection. Endgame can share one piece assembly.
 
     Storage operations run on the event loop, preventing shared seek races.
@@ -71,12 +73,47 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
     schedule_changed = asyncio.Event()
     peer_errors, tracker_errors = [], []
     peer_id = b"-CB0002-" + os.urandom(12)
+    pex_sources, pex_hosts = {}, set()
+    pex_task = None
     storage = server = tracker_task = None
     discovery = None
     tracker_urls = torrent.trackers[:8] if use_trackers else ()
     started_trackers = set()
     intervals = {}
     port = 0
+
+    def connected_peers():
+        return tuple(peer.writer.get_extra_info("peername")[:2] for peer in sessions.values()
+                     if peer.handshaken and not peer.writer.is_closing())
+
+    def make_pex(writer):
+        if not use_pex or torrent.private:
+            return None
+        remote = writer.get_extra_info("peername")[:2]
+        def discovered(addresses):
+            if remote[0] not in pex_sources and len(pex_sources) >= 32:
+                return
+            source_hosts = pex_sources.setdefault(remote[0], set())
+            for address in addresses:
+                if len(peers) >= 200 or len(pex_hosts) >= 100 or len(source_hosts) >= 25:
+                    break
+                if address[0] in pex_hosts or address in peers:
+                    continue
+                source_hosts.add(address[0])
+                pex_hosts.add(address[0])
+                peers.append(address)
+                metrics.pex_peers += 1
+                schedule_changed.set()
+        return PexSession(remote, discover=discovered, connected=connected_peers)
+
+    async def refresh_pex():
+        while True:
+            await asyncio.sleep(60)
+            # Send only on fully handshaken outbound connections. Inbound
+            # contacts' source ports are not evidence of reachable listen ports.
+            connected = set(sessions.values()) | set(server.peers)
+            await asyncio.gather(*(peer.pex_update() for peer in connected
+                                   if peer.handshaken), return_exceptions=True)
 
     def report(complete=False):
         result = metrics.report(complete=complete)
@@ -116,6 +153,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
             for address in result.peers:
                 if address not in peers and len(peers) < 200:
                     peers.append(address)
+                    schedule_changed.set()
             intervals[url] = perf_counter() + max(1, result.interval)
             started_trackers.add(url)
         except (OSError, ValueError, asyncio.TimeoutError) as error:
@@ -169,10 +207,11 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                     retry_at.pop(address, None)
                     metrics.connections += 1
                     reader, writer = await asyncio.wait_for(asyncio.open_connection(*address), timeout)
-                    peer = Peer(reader, writer, torrent, metrics, timeout)
+                    peer = Peer(reader, writer, torrent, metrics, timeout, pex=make_pex(writer))
                     sessions[address] = peer
                     await peer.handshake(peer_id)
                     await peer.ready()
+                    peer.handshaken = True
                 if duplicate is not None:
                     if (duplicate not in remaining or duplicate not in peer.available
                             or duplicate not in pieces or pieces[duplicate].invalid):
@@ -286,13 +325,16 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         remaining = set(range(len(torrent.hashes))) - storage.verified
         metrics.resumed_bytes = sum(torrent.piece_size(i) for i in storage.verified)
         server = SeedServer(torrent, storage, metrics=metrics, peer_id=peer_id,
-                            timeout=timeout, max_clients=max_connections)
+                            timeout=timeout, max_clients=max_connections, pex_factory=make_pex)
         port = await server.start(listen_host, listen_port)
+        if use_pex and not torrent.private:
+            pex_task = asyncio.create_task(refresh_pex())
         if remaining and use_dht and not torrent.private:
             def found_peers(addresses):
                 for address in addresses:
                     if address not in peers and len(peers) < 200:
                         peers.append(address)
+                        schedule_changed.set()
             discovery = DhtDiscovery(torrent, port, metrics, bootstrap=dht_bootstrap,
                                      timeout=min(timeout, 15.0), on_peers=found_peers,
                                      bind_host=listen_host)
@@ -417,7 +459,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
             # are still connecting or stalled. Drain the event waiter on every
             # exit so cancellation never leaves an orphan task behind.
             wake = asyncio.create_task(discovery.changed.wait()) if discovery else None
-            progress_wake = asyncio.create_task(schedule_changed.wait()) if endgame else None
+            progress_wake = asyncio.create_task(schedule_changed.wait())
             try:
                 waiting = set(tasks)
                 if wake is not None:
@@ -466,6 +508,9 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         if tracker_task is not None:
             tracker_task.cancel()
             await asyncio.gather(tracker_task, return_exceptions=True)
+        if pex_task is not None:
+            pex_task.cancel()
+            await asyncio.gather(pex_task, return_exceptions=True)
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)

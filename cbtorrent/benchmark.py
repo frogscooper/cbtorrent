@@ -174,7 +174,8 @@ async def run_benchmark(*, trials=3, size=1024 * 1024, seed=2026, progress=None,
     scenarios = scenarios_for(suite, size)
     rows = []
     code_hash = hashlib.sha256()
-    for name in ("policy.py", "client.py", "wire.py", "benchmark.py", "seeder.py"):
+    for name in ("policy.py", "client.py", "wire.py", "benchmark.py", "seeder.py",
+                 "pex.py", "extensions.py", "metrics.py"):
         code_hash.update(Path(__file__).with_name(name).read_bytes())
     with tempfile.TemporaryDirectory(prefix="cbtorrent-benchmark-") as directory:
         root = Path(directory)
@@ -210,6 +211,7 @@ async def run_benchmark(*, trials=3, size=1024 * 1024, seed=2026, progress=None,
                             try:
                                 report = await download(torrent, peers, output, concurrency=config["concurrency"],
                                                         policy=POLICIES[name](), use_trackers=False, use_dht=False,
+                                                        use_pex=False,
                                                         timeout=3, piece_timeout=10)
                             except DownloadError as error:
                                 report = error.report

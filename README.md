@@ -231,9 +231,9 @@ all default bootstrap endpoints. Otherwise, the torrent's `nodes` contacts are
 used when present, falling back to `dht.transmissionbt.com:6881` and
 `router.utorrent.com:6881`. `create --node HOST:PORT` embeds an explicit bootstrap
 contact without adding built-in public routers to generated torrents.
-The Python `download()` API preserves its prior network behavior: opt in with
+The Python `download()` API preserves its prior DHT behavior: opt in with
 `use_dht=True`; `dht_bootstrap=[]` disables bootstrap DNS entirely. Policy benchmarks
-explicitly disable DHT, and DHT tests use only local UDP/TCP fixtures.
+explicitly disable DHT and PEX, and DHT tests use only local UDP/TCP fixtures.
 
 DHT starts alongside downloads and refreshes every five minutes. A download with
 no usable peers waits for the initial lookup, bounded by the smaller of `--timeout`
@@ -265,6 +265,34 @@ counts unique peers per lookup, including peers already seen in previous lookups
 `dht_errors` contains setup errors. Existing `wire_*` and `protocol_overhead_bytes`
 retain their peer-TCP-only meanings; DHT overhead is separate. Completion time
 includes any initial wait for discovery.
+
+### Peer exchange
+
+Public downloads negotiate BEP 11 `ut_pex` after the torrent metadata is verified.
+A connected peer can suggest other IPv4/IPv6 endpoints; these enter the same
+scheduler, connection/retry limits, and piece hash checks. `--no-pex` disables
+it for headless downloads. Private torrents never advertise, consume, or send PEX.
+Magnet metadata lookup does not use PEX before the private flag is known.
+
+Hints are untrusted: at most 25 candidates per source IP, 100 PEX candidates per
+download, 32 source records, and 200 total candidates. PEX accepts only one port
+per suggested IP across sources. Invalid/unroutable contacts are ignored; a public
+source cannot redirect the client into a private/local network. Messages are
+capped at 4 KiB, with 200 initial or 50 subsequent additions/drops. Incoming
+traffic has a two-message burst allowance, refilling once per minute.
+
+Outgoing updates batch fully handshaken outbound connections and their drops,
+at most once per minute and 50 additions/drops per message. Incoming clients'
+ephemeral source ports are never propagated as listening ports. Standalone
+seeders do not initiate outbound connections or provide a PEX discovery engine.
+A remote `dropped` hint never closes our connection or removes a tracker peer.
+
+Reports add `pex_messages_sent`, `pex_messages_received`, `pex_sent_bytes`,
+`pex_received_bytes`, and `pex_peers` (newly admitted candidates). PEX byte counts
+include TCP message framing and malformed PEX frames, but exclude negotiation.
+They are subsets of `wire_*` and existing protocol overhead; do not add them again
+when calculating total traffic. Policy benchmarks disable PEX and DHT. Their code
+fingerprint now also covers PEX, extension negotiation, and metric definitions.
 
 ## Peer policies
 
@@ -360,8 +388,14 @@ trackers, DHT, PEX, LSD, NAT mapping, and update checks, and never attaches to y
 personal session. qBittorrent is only a test dependency. Each case has a deadline;
 failure reports include diagnostics, and the owned process/profile are cleaned up.
 Use a new report filename each run. CI uploads the JSON report even on failure.
+Add `--enable-pex` to repeat the nine cases and a tenth discovery case: qBittorrent
+introduces a seed whose address cbtorrent was never given. The seed reveals its
+verified pieces only after cbtorrent connects through that referral. This checks
+actual PEX traffic and scheduler admission, not only extension negotiation. CI
+runs both configurations with separate reports. The discovery case allows a
+90-second PEX deadline because update intervals vary across clients.
 
-Reports include client/library versions, nine expected cases, successes/failures,
+Reports include client/library versions, expected cases, successes/failures,
 elapsed case seconds, and cbtorrent's existing byte counters. Case seconds include
 test orchestration and disk verification; they are not download benchmarks.
 API startup, seed-readiness handshake probes, and qBittorrent resource use are
@@ -375,6 +409,7 @@ outside cbtorrent's transfer counters. Remote API byte statistics can lag comple
 - Incoming upload listener during downloads; standalone seed server
 - HTTP(S) and IPv4 UDP trackers; explicit IPv4/IPv6 peers
 - Bounded IPv4 DHT discovery, announcements, and KRPC query responses
+- Bounded IPv4/IPv6 peer exchange for verified public torrents
 - V1 magnets, BEP 10 extension negotiation, and hash-verified BEP 9 metadata exchange
 - JSON metrics and per-peer observations
 - Desktop GUI as the default launch path with multi-torrent queue and session persistence; headless subcommands for scripts and CI
@@ -386,7 +421,7 @@ the first 8 unique tracker URLs. Incoming clients use a separate cap equal to
 
 ## Limits
 
-Not present: PEX, uTP, encryption, v2 torrents,
+Not present: uTP, encryption, v2 torrents,
 automatic NAT mapping, classic tit-for-tat upload slots. Outbound connections
 are download-oriented; uploads use the incoming listener. Peer recovery is bounded
 within one run; bans and policy state do not persist across restarts. Storage and hashing run on the event loop. Publication uses an

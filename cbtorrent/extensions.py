@@ -15,8 +15,10 @@ def extended(identifier, payload):
     return struct.pack("!I", len(body)) + body
 
 
-def handshake(info=b""):
+def handshake(info=b"", *, pex=False):
     fields = {b"m": {b"ut_metadata": METADATA_ID}, b"reqq": 4}
+    if pex:
+        fields[b"m"][b"ut_pex"] = 2
     if info:
         fields[b"metadata_size"] = len(info)
     return extended(0, encode(fields))
