@@ -111,7 +111,7 @@ and `download_piece()` in `wire.py`, then `tests/test_lifecycle.py`.
 **Try yourself:** Run the missing-block endgame test. Check its cancel message and
 why the helper requests one block rather than the whole piece.
 
-## Peer exchange
+## [#16 — Peer exchange](https://github.com/frogscooper/cbtorrent/pull/16)
 
 **What changed:** Public downloads can learn peers from existing connections
 through BEP 11 peer exchange. This supplements explicit peers, trackers, and DHT;
