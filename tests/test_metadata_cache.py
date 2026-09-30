@@ -212,6 +212,7 @@ class CacheTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.cache.put(self.meta)
         self.target().unlink()
+        (self.cache.path / ".lock").unlink()
         os.mkfifo(self.cache.path / ".lock")
         with self.assertRaises(ValueError):
             self.cache.put(self.meta)
