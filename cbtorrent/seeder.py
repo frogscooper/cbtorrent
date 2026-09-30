@@ -11,6 +11,7 @@ from pathlib import Path
 from .metrics import Metrics
 from .filepaths import open_payload, reject_symlinks
 from .wire import BLOCK_SIZE, PROTOCOL, Peer, message
+from .extensions import RESERVED, handshake as extension_handshake
 
 
 class FileSource:
@@ -120,7 +121,9 @@ class SeedServer:
             reply = await peer.read(68)
             if reply[:20] != PROTOCOL or reply[28:48] != self.torrent.info_hash or reply[48:] == self.peer_id:
                 raise ValueError("invalid incoming handshake")
-            await peer.send(PROTOCOL + bytes(8) + self.torrent.info_hash + self.peer_id)
+            await peer.send(PROTOCOL + RESERVED + self.torrent.info_hash + self.peer_id)
+            if reply[25] & 0x10:
+                await peer.send(extension_handshake(peer.extensions.info))
             bitfield = bytearray((len(self.torrent.hashes) + 7) // 8)
             for index in self.source.verified:
                 bitfield[index // 8] |= 128 >> (index % 8)

@@ -77,6 +77,8 @@
         if controller.busy:
             if snap is not None and snap.status == "running":
                 set_status(f"Downloading {format_percent(snap.done_bytes, snap.length)}")
+            elif snap is not None and snap.status == "metadata":
+                set_status("Finding peers and fetching metadata...")
             elif snap is not None and snap.status == "starting":
                 set_status("Starting...")
         elif snap is not None and snap.status == "error":
@@ -94,7 +96,7 @@
 
     # CLI preload: add then select
     if torrent is not None:
-        pre = add_torrent(Path(torrent), output_path=Path(output) if output else None)
+        pre = add_torrent(torrent, output_path=Path(output) if output else None)
         if pre is not None:
             selected_id[0] = pre.id
 

@@ -57,7 +57,7 @@ python -m cbtorrent gui example.torrent --output downloads/example.bin --peer 12
 If there is no display, no tkinter, or `Tk()` fails, the process exits non-zero and
 points you at `cbtorrent download`. There is no silent CLI fallback.
 
-Toolbar: **Add** | **Remove** | **Pause** | **Resume** | **Policy**, with
+Toolbar: **Add** | **Add Magnet** | **Remove** | **Pause** | **Resume** | **Policy**, with
 **Start Queue**, **Stop Queue**, **Move Up**, and **Move Down** below it.
 The upper pane shows the queue in session order. Selecting a row shows its
 progress, rates, and peers. At most one download runs at a time.
@@ -104,6 +104,57 @@ Ctrl+C closes sockets and keeps partial work.
 While downloading, the client listens on `0.0.0.0` with an ephemeral port and shares
 verified pieces with incoming peers. Use `--port 6881` for a stable announced port, or
 `--listen-host 127.0.0.1` for local experiments. There is no automatic NAT mapping.
+
+### Magnet links
+
+Paste a v1 magnet into **Add Magnet**, or pass a quoted URI to the CLI:
+
+```bash
+python -m cbtorrent download "magnet:?xt=urn:btih:INFO_HASH&tr=ENCODED_TRACKER_URL" --output downloads/result
+python -m cbtorrent "magnet:?xt=urn:btih:INFO_HASH" --output downloads/result
+```
+
+Replace `INFO_HASH` with a 40-character hex or 32-character base32 v1 hash.
+Repeated `tr` tracker URLs and `x.pe=HOST:PORT` peers are supported; percent-encode
+tracker URLs containing query parameters. `--peer` also works. Discovery uses
+trackers and IPv4 DHT by default; `--no-trackers` and `--no-dht` disable them in
+both stages. At least one discovered peer must support BEP 9 metadata exchange.
+
+The UI shows **Finding peers and fetching metadata** before payload progress.
+BEP 10 negotiates each peer's extension ID; BEP 9 fetches 16 KiB metadata blocks.
+The entire raw info dictionary must match the magnet's SHA-1 before its paths,
+piece hashes, and file lengths reach the ordinary downloader. The `dn` display
+name is never a destination path: GUI magnets default to `downloads/<info-hash>`;
+`--output` chooses the destination explicitly. Multi-file, resume, and policy
+behavior then match `.torrent` downloads. Public seeders and partial downloaders
+also serve verified metadata, independently of how many payload pieces they have.
+
+Limits: 16 KiB URI, 8 trackers, 50 `x.pe` entries, 200 discovered candidates,
+8 MiB metadata per peer, at most 3 concurrent metadata peers (or a smaller
+`--max-connections`), and 4 outstanding metadata blocks per peer. Each peer gets
+at most 10 seconds or the smaller `--timeout`; the whole lookup gets
+`--metadata-timeout` (default 60 seconds). Tracker stop cleanup can take up to
+one additional second. Corrupt/rejected metadata falls back to another peer.
+Cancellation closes discovery and peer sockets without creating payload files.
+
+The queue saves the magnet URI. Verified metadata is cached in memory only;
+reopening the app or restarting a CLI download resolves it again before rehashing
+the saved `.part`. Private magnets are rejected: use the original `.torrent`.
+The private flag is unknown before metadata arrives, so a magnet can already
+have caused discovery queries. Metadata discovery never announces to DHT.
+V2-only magnets, web-seed URL fetching, and OS magnet-handler registration are
+not implemented. Tests use local peers, trackers, and DHT nodes; interoperability
+with independent clients and public swarms remains unverified.
+
+Magnet reports add a `metadata` object with that stage's time, CPU, TCP bytes,
+tracker/DHT counters, failures, verified metadata size, and bounded error list.
+Top-level byte/CPU counters retain their payload-session meaning; add corresponding
+metadata counters for whole-run costs. Metadata TCP traffic is entirely protocol
+overhead, never payload or ML training data. `completion_seconds` and
+`elapsed_seconds` include both stages and cleanup for magnets;
+`payload_completion_seconds` preserves the existing payload completion measurement.
+Failed resolution reports `complete: false`, null completion time, and metadata
+failures. Existing `.torrent` report definitions are unchanged.
 
 ### Multi-file directories
 
@@ -250,6 +301,7 @@ public churn, or disk contention. Do not treat a localhost win as a public-swarm
 - Incoming upload listener during downloads; standalone seed server
 - HTTP(S) and IPv4 UDP trackers; explicit IPv4/IPv6 peers
 - Bounded IPv4 DHT discovery, announcements, and KRPC query responses
+- V1 magnets, BEP 10 extension negotiation, and hash-verified BEP 9 metadata exchange
 - JSON metrics and per-peer observations
 - Desktop GUI as the default launch path with multi-torrent queue and session persistence; headless subcommands for scripts and CI
 
@@ -260,7 +312,7 @@ the first 8 unique tracker URLs. Incoming clients use a separate cap equal to
 
 ## Limits
 
-Not present: magnet links, PEX, uTP, encryption, v2 torrents, endgame
+Not present: PEX, uTP, encryption, v2 torrents, endgame
 duplication, automatic NAT mapping, classic tit-for-tat upload slots. Outbound connections
 are download-oriented; uploads use the incoming listener. Peers retired after failure are
 not retried in that run. Storage and hashing run on the event loop. Publication uses an
@@ -271,13 +323,16 @@ public-swarm interoperability are still open work.
 DHT state is scoped to the running download/seed session. Persistent routing tables,
 full bucket refresh/replacement probing, BEP 42 node-ID hardening, IPv6 DHT, and TCP
 DHT `PORT` exchange are not implemented. This is a bounded discovery implementation,
-not a complete long-lived DHT router. Magnet metadata exchange is a separate feature.
+not a complete long-lived DHT router.
 
 ## Contributing
 
 See [AGENTS.md](AGENTS.md) for architecture notes and shared-agent working rules.
+Short technical explanations and learning exercises live in [PR notes](docs/PR_NOTES.md).
 CI runs the unit suite and the installed CLI on Windows and Linux (Python 3.11 and 3.13).
 
 Protocol references: [BEP 3](https://www.bittorrent.org/beps/bep_0003.html),
 [BEP 23](https://www.bittorrent.org/beps/bep_0023.html),
-[BEP 15](https://www.bittorrent.org/beps/bep_0015.html).
+[BEP 15](https://www.bittorrent.org/beps/bep_0015.html),
+[BEP 9](https://www.bittorrent.org/beps/bep_0009.html),
+[BEP 10](https://www.bittorrent.org/beps/bep_0010.html).

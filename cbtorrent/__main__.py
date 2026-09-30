@@ -8,6 +8,7 @@ from .benchmark import run_benchmark
 from .client import DownloadError, download
 from .dht import DhtDiscovery
 from .metainfo import Torrent, create
+from .magnet import Magnet, load_source, download_magnet
 from .metrics import Metrics
 from .policy import (AdaptivePolicy, BanditPolicy, OptimisticPolicy, RecoveryPolicy,
                      ThroughputPolicy, TimeBudgetPolicy)
@@ -96,7 +97,8 @@ def build_parser():
         "Use a subcommand for headless/CLI: download, seed, create, inspect, benchmark, gui."))
     commands = parser.add_subparsers(dest="command", required=False)
     get = commands.add_parser("download", help="download and share verified pieces")
-    get.add_argument("torrent", type=Path)
+    get.add_argument("torrent", help=".torrent path or quoted v1 magnet URI")
+    get.add_argument("--metadata-timeout", type=float, default=60.0)
     get.add_argument("--peer", type=endpoint, action="append", default=[])
     get.add_argument("--output", type=Path, required=True,
                      help="destination file, or new root directory for a multi-file torrent")
@@ -138,7 +140,8 @@ def build_parser():
     bench.add_argument("--policies", default="heuristic,bandit,adaptive")
     bench.add_argument("--report", type=Path)
     gui = commands.add_parser("gui", help="open the desktop progress window (default when no command)")
-    gui.add_argument("torrent", type=Path, nargs="?")
+    gui.add_argument("torrent", type=lambda value: value if value.lower().startswith("magnet:") else Path(value), nargs="?")
+    gui.add_argument("--metadata-timeout", type=float, default=60.0)
     gui.add_argument("--peer", type=endpoint, action="append", default=[])
     gui.add_argument("--output", type=Path)
     gui.add_argument("--policy", choices=("heuristic", "bandit", "adaptive", "optimistic", "recovery", "timed"), default="heuristic")
@@ -184,22 +187,24 @@ def main(argv=None):
                 listen_port=args.port, timeout=args.timeout,
                 piece_timeout=args.piece_timeout, pipeline=args.pipeline,
                 concurrency=args.concurrency, max_connections=args.max_connections,
-                policy_name=args.policy)
+                policy_name=args.policy, metadata_timeout=args.metadata_timeout)
         if args.command == "download":
-            torrent = Torrent.load(args.torrent)
+            torrent = load_source(args.torrent)
             args.output.parent.mkdir(parents=True, exist_ok=True)
             policy = {"heuristic": ThroughputPolicy, "bandit": BanditPolicy,
                       "adaptive": AdaptivePolicy, "optimistic": OptimisticPolicy,
                       "recovery": RecoveryPolicy, "timed": TimeBudgetPolicy}[args.policy]()
             def progress(done, total):
                 print(f"{done}/{total} verified bytes", file=sys.stderr)
-            report = asyncio.run(download(
+            runner = download_magnet if isinstance(torrent, Magnet) else download
+            extra = {"metadata_timeout": args.metadata_timeout} if isinstance(torrent, Magnet) else {}
+            report = asyncio.run(runner(
                 torrent, args.peer, args.output, timeout=args.timeout, piece_timeout=args.piece_timeout,
                 pipeline=args.pipeline, concurrency=args.concurrency, max_connections=args.max_connections,
                 resume=args.resume, policy=policy, use_trackers=not args.no_trackers,
                 use_dht=not args.no_dht, dht_bootstrap=args.dht_bootstrap,
                 listen_host=args.listen_host, listen_port=args.port,
-                progress=progress if args.progress else None))
+                progress=progress if args.progress else None, **extra))
         elif args.command == "seed":
             asyncio.run(seed_file(args))
             return 0

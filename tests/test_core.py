@@ -95,7 +95,9 @@ class TransferTests(unittest.IsolatedAsyncioTestCase):
             try:
                 handshake = await read(68)
                 expected = b"\x13BitTorrent protocol" + bytes(8) + self.torrent.info_hash
-                self.assertEqual(handshake[:48], expected)
+                self.assertEqual(handshake[:20], expected[:20])
+                self.assertEqual(handshake[28:48], expected[28:48])
+                self.assertEqual(handshake[25] & 0x10, 0x10)
                 await send(expected[:28] + (bytes(20) if wrong_hash else self.torrent.info_hash) + b"S" * 20)
                 if wrong_hash:
                     return
