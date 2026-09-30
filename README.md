@@ -137,17 +137,30 @@ at most 10 seconds or the smaller `--timeout`; the whole lookup gets
 one additional second. Corrupt/rejected metadata falls back to another peer.
 Cancellation closes discovery and peer sockets without creating payload files.
 
-The queue saves the magnet URI. Verified metadata is cached in memory only;
-reopening the app or restarting a CLI download resolves it again before rehashing
-the saved `.part`. Private magnets are rejected: use the original `.torrent`.
+The queue saves the magnet URI. GUI and CLI downloads persist verified public
+metadata in `~/.cbtorrent/metadata` (a custom GUI session uses its own parent
+directory). The cache holds at most 128 info dictionaries and 64 MiB, evicting
+oldest writes first. Every read verifies the raw info hash and validates the
+manifest again. Only the current magnet supplies trackers and explicit peers;
+discovery addresses are never cached. Disk work runs outside the event loop;
+cancellation drains an in-progress cache operation before returning. Atomic
+publication and a nonblocking process lock prevent partial reads and competing
+writers. Failed or corrupt cache entries fall back to normal metadata discovery.
+CLI options `--metadata-cache-dir DIR` and `--no-metadata-cache` select or disable
+the cache. Python APIs opt in with `metadata_cache=MetadataCache(path)`.
+A complete `.part` can resume without metadata peers; saved payload is still
+rehash-verified. Private magnets are rejected: use the original `.torrent`.
 The private flag is unknown before metadata arrives, so a magnet can already
 have caused discovery queries. Metadata discovery never announces to DHT.
 V2-only magnets, web-seed URL fetching, and OS magnet-handler registration are
-not implemented. Tests use local peers, trackers, and DHT nodes; interoperability
-with independent clients and public swarms remains unverified.
+not implemented. Tests use local peers, trackers, and DHT nodes. Independent-client
+coverage uses the isolated qBittorrent harness below; public swarms remain unverified.
 
 Magnet reports add a `metadata` object with that stage's time, CPU, TCP bytes,
 tracker/DHT counters, failures, verified metadata size, and bounded error list.
+`metadata.cache_hit` indicates a verified disk hit; `cache_errors` records at most
+two short cache failure messages. Cache hits have zero metadata network traffic.
+Metadata time and CPU include cache lookup, validation, and publication.
 Top-level byte/CPU counters retain their payload-session meaning; add corresponding
 metadata counters for whole-run costs. Metadata TCP traffic is entirely protocol
 overhead, never payload or ML training data. `completion_seconds` and

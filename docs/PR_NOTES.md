@@ -133,3 +133,26 @@ and `tests/test_pex.py`.
 
 **Try yourself:** Run the PEX-only discovery test. Follow how an empty bootstrap
 peer supplies an address that leads to a complete, hash-verified download.
+
+## [#17 — Persistent magnet metadata cache](https://github.com/frogscooper/cbtorrent/pull/17)
+
+**What changed:** Restarted GUI and CLI magnet downloads can reuse verified file
+layouts from disk, including an offline resume of a complete partial download.
+Python callers choose their cache explicitly; tests use temporary directories.
+
+**How it works:** A cache file contains only the raw info dictionary, named by
+its hash. Every read checks that hash and validates the manifest again. Current
+magnet trackers and peers supply discovery hints. Atomic replacement prevents
+partial reads, a process lock serializes writers, and eviction bounds the cache
+to 128 entries and 64 MiB. Cache operations run in a worker that cancellation
+drains before the download returns.
+
+**Correctness:** Cached metadata never marks payload pieces verified. Resume
+still rehashes every saved piece. Private metadata is not published; corrupt or
+unavailable cache files fall back to network discovery with short error reports.
+
+**Read first:** `metadata_cache.py`, `resolve()` in `magnet.py`, and
+`tests/test_metadata_cache.py`.
+
+**Try yourself:** Run the corrupt-partial-payload cache test. Explain why its
+metadata hit still requires downloading the damaged payload piece again.

@@ -9,12 +9,13 @@ from hashlib import sha1
 from time import perf_counter
 from urllib.parse import parse_qsl, urlsplit
 
-from .bencode import decode, encode
+from .bencode import encode
 from .client import DownloadError, download
 from .dht import DEFAULT_BOOTSTRAP, DhtNode
 from .extensions import (BLOCK, MAX_EXTENDED, METADATA_ID, RESERVED, extended,
                          handshake, metadata_message, negotiation)
 from .metainfo import Torrent
+from .metadata_cache import verified_metadata
 from .metrics import Metrics
 from .tracker import announce
 from .wire import PROTOCOL, Peer
@@ -175,7 +176,7 @@ async def fetch_metadata(magnet, address, metrics, *, timeout=10.0):
                     if sha1(raw).digest() != magnet.info_hash:
                         metrics.hash_failures += 1
                         raise ValueError("metadata failed info-hash verification")
-                    torrent = Torrent.from_bytes(encode({b"info": decode(raw)}))
+                    torrent = verified_metadata(raw, magnet.info_hash)
                     if torrent.private:
                         raise ValueError("private magnets are unsupported; use the original .torrent file")
                     return replace(torrent, trackers=magnet.trackers)
@@ -186,7 +187,7 @@ async def fetch_metadata(magnet, address, metrics, *, timeout=10.0):
 
 async def resolve(magnet, peers=(), *, timeout=60.0, peer_timeout=10.0,
                   use_trackers=True, use_dht=True, dht_bootstrap=None,
-                  concurrency=3, listen_host="0.0.0.0"):
+                  concurrency=3, listen_host="0.0.0.0", metadata_cache=None):
     if not all(math.isfinite(t) and t > 0 for t in (timeout, peer_timeout)):
         raise ValueError("metadata timeouts must be positive and finite")
     if len(peers) > 200:
@@ -195,6 +196,41 @@ async def resolve(magnet, peers=(), *, timeout=60.0, peer_timeout=10.0,
         raise ValueError("metadata concurrency must be 1..3")
     metrics = Metrics()
     metrics.start()
+    cache_errors = []
+
+    async def cache_call(method, value):
+        # Drain the worker on cancellation: no cache mutation continues after
+        # this coroutine has returned and the GUI closes its private loop.
+        task = asyncio.create_task(asyncio.to_thread(method, value))
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            while not task.done():
+                try:
+                    await asyncio.shield(task)
+                except asyncio.CancelledError:
+                    continue  # Repeated UI cancel actions must not detach it.
+                except Exception:
+                    break
+            if not task.cancelled():
+                task.exception()  # Retrieve any worker error; cancellation wins.
+            raise
+        except (OSError, ValueError) as error:
+            cache_errors.append((str(error) or type(error).__name__)[:256])
+            return None
+
+    if metadata_cache is not None:
+        cached = await cache_call(metadata_cache.get, magnet.info_hash)
+        if cached is not None:
+            report = metrics.report(complete=not cached.private)
+            report.update(cache_hit=True, cache_errors=cache_errors,
+                          metadata_size=len(cached.info_bytes), errors=[])
+            if cached.private:
+                report["errors"] = ["private magnets are unsupported; use the original .torrent file"]
+                raise DownloadError(report["errors"][0], dict(complete=False, completion_seconds=None,
+                                    elapsed_seconds=report["elapsed_seconds"], metadata=report))
+            addresses = tuple(dict.fromkeys(tuple(peers) + magnet.peers))[:200]
+            return replace(cached, trackers=magnet.trackers), addresses, report
     queue, seen, errors, tasks = asyncio.Queue(maxsize=200), {}, [], []
     loop = asyncio.get_running_loop()
     found = loop.create_future()
@@ -293,7 +329,10 @@ async def resolve(magnet, peers=(), *, timeout=60.0, peer_timeout=10.0,
         if announced:
             await asyncio.gather(*(tracker(url, "stopped") for url in announced))
         found.cancel()
+    if torrent is not None and metadata_cache is not None:
+        await cache_call(metadata_cache.put, torrent)
     report = metrics.report(complete=torrent is not None)
+    report.update(cache_hit=False, cache_errors=cache_errors)
     report["errors"] = errors
     report["metadata_size"] = len(torrent.info_bytes) if torrent is not None else 0
     if torrent is None:
@@ -303,14 +342,15 @@ async def resolve(magnet, peers=(), *, timeout=60.0, peer_timeout=10.0,
     return torrent, tuple(seen), report
 
 
-async def download_magnet(magnet, peers, output, *, metadata_timeout=60.0, **options):
+async def download_magnet(magnet, peers, output, *, metadata_timeout=60.0,
+                          metadata_cache=None, **options):
     started = perf_counter()
     torrent, addresses, metadata = await resolve(
         magnet, peers, timeout=metadata_timeout, peer_timeout=min(options.get("timeout", 15.0), 10.0),
         use_trackers=options.get("use_trackers", True), use_dht=options.get("use_dht", False),
         dht_bootstrap=options.get("dht_bootstrap"),
         concurrency=min(3, options.get("max_connections", 16)),
-        listen_host=options.get("listen_host", "0.0.0.0"))
+        listen_host=options.get("listen_host", "0.0.0.0"), metadata_cache=metadata_cache)
     on_metadata = options.pop("on_metadata", None)
     if on_metadata:
         on_metadata(torrent)

@@ -343,6 +343,7 @@ class MagnetTransferTests(unittest.IsolatedAsyncioTestCase):
         link = uri(self.torrent) + f"&x.pe=127.0.0.1:{address[1]}"
         process = await asyncio.create_subprocess_exec(
             sys.executable, "-m", "cbtorrent", "download", link, "--output", str(self.output),
+            "--metadata-cache-dir", str(self.root / "cache"),
             "--no-trackers", "--no-dht", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         try:
             out, err = await asyncio.wait_for(process.communicate(), 10)

@@ -99,6 +99,8 @@ def build_parser():
     get = commands.add_parser("download", help="download and share verified pieces")
     get.add_argument("torrent", help=".torrent path or quoted v1 magnet URI")
     get.add_argument("--metadata-timeout", type=float, default=60.0)
+    get.add_argument("--metadata-cache-dir", type=Path, help="verified magnet metadata cache directory")
+    get.add_argument("--no-metadata-cache", action="store_true", help="fetch magnet metadata each run")
     get.add_argument("--peer", type=endpoint, action="append", default=[])
     get.add_argument("--output", type=Path, required=True,
                      help="destination file, or new root directory for a multi-file torrent")
@@ -208,6 +210,9 @@ def main(argv=None):
                 print(f"{done}/{total} verified bytes", file=sys.stderr)
             runner = download_magnet if isinstance(torrent, Magnet) else download
             extra = {"metadata_timeout": args.metadata_timeout} if isinstance(torrent, Magnet) else {}
+            if isinstance(torrent, Magnet) and not args.no_metadata_cache:
+                from .metadata_cache import MetadataCache, default_cache_path
+                extra["metadata_cache"] = MetadataCache(args.metadata_cache_dir or default_cache_path())
             report = asyncio.run(runner(
                 torrent, args.peer, args.output, timeout=args.timeout, piece_timeout=args.piece_timeout,
                 pipeline=args.pipeline, concurrency=args.concurrency, max_connections=args.max_connections,
