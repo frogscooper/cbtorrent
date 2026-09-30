@@ -134,7 +134,7 @@ and `tests/test_pex.py`.
 **Try yourself:** Run the PEX-only discovery test. Follow how an empty bootstrap
 peer supplies an address that leads to a complete, hash-verified download.
 
-## Persistent magnet metadata cache
+## [#17 — Persistent magnet metadata cache](https://github.com/frogscooper/cbtorrent/pull/17)
 
 **What changed:** Restarted GUI and CLI magnet downloads can reuse verified file
 layouts from disk, including an offline resume of a complete partial download.
