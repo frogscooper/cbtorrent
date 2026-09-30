@@ -57,10 +57,28 @@ python -m cbtorrent gui example.torrent --output downloads/example.bin --peer 12
 If there is no display, no tkinter, or `Tk()` fails, the process exits non-zero and
 points you at `cbtorrent download`. There is no silent CLI fallback.
 
-Toolbar: **Add** | **Add Magnet** | **Remove** | **Pause** | **Resume** | **Policy**, with
+Toolbar: **Add Torrent** | **Remove** | **Pause** | **Resume** | **Retry** |
+**Open Folder** | **Policy**, with
 **Start Queue**, **Stop Queue**, **Move Up**, and **Move Down** below it.
 The upper pane shows the queue in session order. Selecting a row shows its
 progress, rates, and peers. At most one download runs at a time.
+
+**Add Torrent** accepts a `.torrent` file or pasted v1 magnet link in the same
+dialog. Browse for a file and choose a download folder, then **Add to Queue**.
+The first GUI folder defaults to `~/Downloads/cbtorrent`; a successful addition
+remembers the chosen folder in the session for future additions. Existing items
+keep their original destinations. New entries choose a free destination if a
+file, partial file, or queued item already uses the suggested name. Magnet
+destinations use the info hash, never an untrusted display name. Adding or
+cancelling the dialog does not create payload files. Use **Resume** for the
+selected item or **Start Queue** to begin queued downloads.
+
+**Retry** is enabled for failed items once the worker has finished cleanup. It
+keeps the same destination and rehashes saved `.part` pieces. Failure explanations
+persist across app restarts. Existing completed files are never overwritten or
+silently redirected to a different name on retry. **Open Folder** opens a
+completed multi-file directory, or the containing directory for a single file
+or incomplete download; it never launches a payload file.
 
 **Start Queue** runs eligible queued torrents in order and advances after each
 completion. It skips paused, failed, and completed items. A failure stops the
@@ -77,6 +95,12 @@ resumes first, then the remaining queue continues. Closing a manual download
 leaves it paused. A stopped queue stays stopped. Existing version 1 session files
 remain readable; their saved downloading item resumes as before, without enabling
 automatic queue advancement. Resumed pieces are always rehashed before use.
+
+GUI workflow tests invoke real Tk buttons and use local transfer fixtures.
+CI runs them with a virtual display on Linux and hidden windows on Windows.
+For an explicit GUI gate, set `CBTORRENT_REQUIRE_GUI_TESTS=1` before running
+`python -m unittest discover -s tests -p test_gui_workflow.py -v`; unavailable
+Tk/display support then fails instead of skipping those cases.
 
 ### Headless download
 

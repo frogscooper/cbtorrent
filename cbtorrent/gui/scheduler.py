@@ -17,12 +17,12 @@ class QueueScheduler:
         self.session.resume(item.id)
         try:
             started = self.launch(item)
-        except (OSError, ValueError, RuntimeError):
-            self.session.set_status(item.id, "error")
+        except (OSError, ValueError, RuntimeError) as error:
+            self.session.set_status(item.id, "error", error=str(error))
             self.session.set_queue_running(False)
             raise
         if not started:
-            self.session.set_status(item.id, "error")
+            self.session.set_status(item.id, "error", error=item.error or "Could not start the download.")
             self.session.set_queue_running(False)
             return False
         self.active_id = item.id
@@ -54,7 +54,7 @@ class QueueScheduler:
                     self.session.set_status(item.id, "complete")
                 elif item.status == "downloading":
                     status = "error" if snap is None or snap.status != "cancelled" else "paused"
-                    self.session.set_status(item.id, status)
+                    self.session.set_status(item.id, status, error=getattr(snap, "error", None))
                     self.session.set_queue_running(False)
 
     def poll(self):
