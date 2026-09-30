@@ -41,7 +41,7 @@ not atomic across a crash.
 **Try yourself:** Make two tiny files whose boundary falls inside a piece. Trace
 their offsets and check that changing either file changes that piece's hash.
 
-## Magnet links
+## [#13 — Magnet links](https://github.com/frogscooper/cbtorrent/pull/13)
 
 **What changed:** Paste a v1 magnet in the GUI or pass it to `download`. It can
 find peers through trackers, DHT, or explicit addresses, then download files or
