@@ -157,7 +157,7 @@ unavailable cache files fall back to network discovery with short error reports.
 **Try yourself:** Run the corrupt-partial-payload cache test. Explain why its
 metadata hit still requires downloading the damaged payload piece again.
 
-## GUI download workflow
+## [#18 — GUI download workflow](https://github.com/frogscooper/cbtorrent/pull/18)
 
 **What changed:** One Add dialog accepts torrent files and magnet links, lets you
 choose a download folder, and remembers that folder for later additions. Failed
