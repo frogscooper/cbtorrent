@@ -58,6 +58,7 @@ class Torrent:
     private: bool = False
     nodes: tuple[tuple[str, int], ...] = ()
     files: tuple[TorrentFile, ...] = ()
+    info_bytes: bytes = b""
 
     @property
     def multi_file(self):
@@ -118,7 +119,8 @@ class Torrent:
         return cls(safe_name, length, piece_length,
                    tuple(hashes[i:i + 20] for i in range(0, len(hashes), 20)),
                    sha1(encode(info)).digest(), tuple(dict.fromkeys(trackers)),
-                   private=bool(private), nodes=tuple(dict.fromkeys(contacts)), files=files)
+                   private=bool(private), nodes=tuple(dict.fromkeys(contacts)), files=files,
+                   info_bytes=encode(info))
 
     @classmethod
     def load(cls, path: Path):

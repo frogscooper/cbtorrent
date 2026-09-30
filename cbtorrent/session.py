@@ -25,11 +25,13 @@ class QueueItem:
     policy: str
     status: str
     queue_order: float
+    magnet_uri: str | None = None
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "path": str(self.torrent_path),
+            "magnet_uri": self.magnet_uri,
             "output": str(self.output),
             "policy": self.policy,
             "status": self.status,
@@ -41,9 +43,15 @@ class QueueItem:
         status = str(data.get("status", "paused"))
         if status not in STATUSES:
             status = "paused"
+        magnet_uri = data.get("magnet_uri")
+        if magnet_uri is not None:
+            from .magnet import Magnet
+            if Magnet.parse(magnet_uri).info_hash.hex() != str(data["id"]):
+                raise ValueError("session magnet hash does not match item")
         return cls(
             id=str(data["id"]),
-            torrent_path=Path(data.get("path") or data.get("torrent_path")),
+            magnet_uri=magnet_uri,
+            torrent_path=Path(data.get("path") or data.get("torrent_path") or "."),
             output=Path(data["output"]),
             policy=str(data.get("policy") or "heuristic"),
             status=status,
@@ -94,7 +102,7 @@ class Session:
         for entry in entries:
             if not isinstance(entry, dict) or "id" not in entry or "output" not in entry:
                 continue
-            if not (entry.get("path") or entry.get("torrent_path")):
+            if not (entry.get("path") or entry.get("torrent_path") or entry.get("magnet_uri")):
                 continue
             try:
                 loaded.append(QueueItem.from_dict(entry))
@@ -135,19 +143,20 @@ class Session:
                 pass
             raise
 
-    def add(self, torrent_path: Path, output: Path | None = None, *,
+    def add(self, torrent_path: Path | str, output: Path | None = None, *,
             policy: str | None = None, status: str = "queued") -> QueueItem:
-        from .metainfo import Torrent
+        from .magnet import Magnet, load_source
 
-        torrent_path = Path(torrent_path)
-        meta = Torrent.load(torrent_path)
+        meta = load_source(torrent_path)
+        magnet_uri = meta.uri if isinstance(meta, Magnet) else None
+        torrent_path = Path(".") if magnet_uri else Path(torrent_path)
         item_id = meta.info_hash.hex()
         if item_id in self._items:
             raise ValueError(f"torrent already in session: {item_id}")
         if status not in STATUSES:
             raise ValueError(f"invalid status: {status}")
         if output is None:
-            output = Path("downloads") / meta.name
+            output = Path("downloads") / (meta.info_hash.hex() if magnet_uri else meta.name)
         else:
             output = Path(output)
         chosen = policy if policy is not None else self.default_policy
@@ -159,6 +168,7 @@ class Session:
             policy=chosen,
             status=status,
             queue_order=order,
+            magnet_uri=magnet_uri,
         )
         self._items[item_id] = item
         self.save()

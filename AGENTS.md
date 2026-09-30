@@ -26,6 +26,8 @@ protocol correctness and useful measurements before optimizing a policy.
   input size limits; keep cancellation effective.
 - `dht.py`: bounded IPv4 KRPC, discovery and announcements. Disable DHT for private
   torrents; use injected loopback bootstrap nodes in tests, never public routers.
+- `magnet.py` / `extensions.py`: bounded BEP 9/10 metadata exchange. Verify the
+  raw info hash and validate the manifest before handing metadata to `client.py`.
 - `policy.py`: observations, heuristic, and optional bandit. Do not train with
   benchmark ground truth or future peer behavior. Keep the heuristic available.
 - `metrics.py` / `benchmark.py`: measurement definitions and paired experiments.
@@ -34,6 +36,12 @@ Keep PRs focused, fetch before starting a branch, and preserve other agents'
 work. Document changed measurement definitions in README. A benchmark win in a
 small localhost scenario is not evidence of public-swarm improvement. Include
 sample sizes and failures alongside timing and byte counts.
+
+For every PR from now on, add a short explanation to `docs/PR_NOTES.md` and link
+the PR when its number is known. Aim for 100–180 words: what changed, how the main
+pieces work together, the important correctness rule or tradeoff, the first code
+and test files to read, and one small hands-on exercise. Keep these notes useful
+to the owner learning the code; do not replace them with a changelog or jargon.
 
 The old `mltorrent` handshake/ranker prototype is preserved in Git history before
 the `cbtorrent` implementation. Do not reintroduce the duplicate package. The

@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..metainfo import Torrent
+from ..magnet import load_source
 from ..observe import format_eta, format_percent, format_rate
 from ..session import Session, default_session_path
 from .chrome import ACCENT, BG, MUTED, PANEL, POLICIES, TEXT
@@ -14,7 +15,7 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
         resume=False, use_trackers=True, listen_host="0.0.0.0", listen_port=0,
         timeout=15.0, piece_timeout=120.0, pipeline=8, concurrency=4,
         max_connections=16, policy_name="heuristic",
-        session_path: Path | None = None, use_dht=True, dht_bootstrap=None):
+        session_path: Path | None = None, use_dht=True, dht_bootstrap=None, metadata_timeout=60.0):
     _NO_DISPLAY = (
         "Desktop GUI needs a display and tkinter. Install the OS tk package "
         "(e.g. python3-tk) or use `cbtorrent download` instead."
@@ -42,10 +43,13 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
     )
 
     def load_meta(item) -> Torrent | None:
+        resolved = getattr(controller, "resolved_torrent", None)
+        if isinstance(resolved, Torrent) and item.id == controller.active_id:
+            metas[item.id] = resolved
         if item.id in metas:
             return metas[item.id]
         try:
-            meta = Torrent.load(item.torrent_path)
+            meta = load_source(item.magnet_uri or item.torrent_path)
         except (OSError, ValueError):
             return None
         metas[item.id] = meta
@@ -249,7 +253,7 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
                 concurrency=download_opts["concurrency"],
                 max_connections=download_opts["max_connections"],
                 policy=POLICIES.get(item.policy, POLICIES["heuristic"])(),
-                item_id=item.id)
+                item_id=item.id, metadata_timeout=metadata_timeout)
         except (OSError, ValueError, RuntimeError) as error:
             set_status(f"Error: {error}")
             return False
@@ -280,6 +284,12 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
         if not session.items():
             set_status("add a torrent to start")
         return item
+
+    def add_magnet():
+        from tkinter import simpledialog
+        uri = simpledialog.askstring("Add magnet", "Paste a v1 magnet link:", parent=root)
+        if uri:
+            add_torrent(uri.strip())
 
     def remove_torrent():
         item = selected_item()
@@ -351,6 +361,7 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
 
     add_btn = ttk.Button(toolbar, text="Add", command=lambda: add_torrent())
     add_btn.pack(side="left")
+    ttk.Button(toolbar, text="Add Magnet", command=add_magnet).pack(side="left", padx=(8, 0))
     remove_btn = ttk.Button(toolbar, text="Remove", command=remove_torrent)
     remove_btn.pack(side="left", padx=(8, 0))
     pause_btn = ttk.Button(toolbar, text="Pause", command=pause_selected)

@@ -3,6 +3,7 @@ import asyncio
 import struct
 
 from .metrics import Metrics
+from .extensions import MAX_EXTENDED, RESERVED, MetadataServer, handshake as extension_handshake
 
 PROTOCOL = b"\x13BitTorrent protocol"
 BLOCK_SIZE = 16 * 1024
@@ -21,6 +22,7 @@ class Peer:
         self.seen_message = False
         self.sent_bytes = 0
         self.received_bytes = 0
+        self.extensions = MetadataServer(torrent) if hasattr(torrent, "info_bytes") else None
 
     async def read(self, size):
         try:
@@ -40,23 +42,30 @@ class Peer:
         await asyncio.wait_for(self.writer.drain(), self.timeout)
 
     async def handshake(self, peer_id):
-        await self.send(PROTOCOL + bytes(8) + self.torrent.info_hash + peer_id)
+        await self.send(PROTOCOL + RESERVED + self.torrent.info_hash + peer_id)
         reply = await self.read(68)
         if reply[:20] != PROTOCOL or reply[28:48] != self.torrent.info_hash:
             raise ValueError("peer handshake does not match torrent")
         if reply[48:] == peer_id:
             raise ValueError("self connection")
+        if reply[25] & 0x10:
+            await self.send(extension_handshake(self.extensions.info))
         await self.send(message(2))
 
     async def receive(self):
         size = struct.unpack("!I", await self.read(4))[0]
-        limit = max(BLOCK_SIZE + 9, 1 + (len(self.torrent.hashes) + 7) // 8)
+        limit = max(MAX_EXTENDED + 1, 1 + (len(self.torrent.hashes) + 7) // 8)
         if size > limit:
             raise ValueError("oversized peer message")
         if size == 0:
             return None, b""
         data = await self.read(size)
         kind, payload = data[0], data[1:]
+        if kind == 20:
+            response = self.extensions.receive(payload)
+            if response is not None:
+                await self.send(response)
+            return kind, payload  # Extension handshake may precede the bitfield.
         if kind == 7 and len(payload) >= 8:
             self.metrics.payload_received_bytes += len(payload) - 8
         if kind in (0, 1, 2, 3):

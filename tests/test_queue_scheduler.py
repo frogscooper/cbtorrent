@@ -174,6 +174,8 @@ class QueueSchedulerTests(unittest.TestCase):
         tk.StringVar = lambda *args, **kwargs: MagicMock()
         tk.Menu = lambda *args, **kwargs: MagicMock()
         tk.filedialog = SimpleNamespace()
+        magnet_uri = "magnet:?xt=urn:btih:" + "12" * 20 + "&dn=magnet-example"
+        tk.simpledialog = SimpleNamespace(askstring=lambda *args, **kwargs: magnet_uri)
         tk.ttk = ttk
         for name in ("Style", "Frame", "Label", "Menubutton", "Progressbar", "Scrollbar"):
             setattr(ttk, name, lambda *args, **kwargs: MagicMock())
@@ -218,6 +220,7 @@ class QueueSchedulerTests(unittest.TestCase):
             commands["Start Queue"]()
             for _ in range(3):
                 root.after.call_args.args[1]()
+            commands["Add Magnet"]()
             root.protocol.call_args.args[1]()
 
         root.mainloop.side_effect = mainloop
@@ -227,7 +230,9 @@ class QueueSchedulerTests(unittest.TestCase):
         self.assertEqual(self.started, [self.items[1].id, self.items[0].id, self.items[2].id])
         again = Session(self.session.path)
         again.load()
-        self.assertTrue(all(item.status == "complete" for item in again.items()))
+        self.assertTrue(all(item.status == "complete" for item in again.items()[:3]))
+        self.assertEqual(again.items()[3].magnet_uri, magnet_uri)
+        self.assertEqual(again.items()[3].status, "queued")
         self.assertFalse(again.queue_running)
 
 

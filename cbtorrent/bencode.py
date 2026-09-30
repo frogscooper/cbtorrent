@@ -13,7 +13,8 @@ def encode(value):
     raise TypeError("bencoding requires integers, bytes, lists, or byte-key dictionaries")
 
 
-def decode(data: bytes, *, max_size: int = 16 * 1024 * 1024):
+def decode_prefix(data: bytes, *, max_size: int = 16 * 1024 * 1024):
+    """Decode one value and return its end offset (BEP 9 appends raw bytes)."""
     if len(data) > max_size:
         raise ValueError("bencoded input exceeds size limit")
     position = 0
@@ -64,6 +65,11 @@ def decode(data: bytes, *, max_size: int = 16 * 1024 * 1024):
         raise ValueError("invalid bencoding token")
 
     value = parse()
+    return value, position
+
+
+def decode(data: bytes, *, max_size: int = 16 * 1024 * 1024):
+    value, position = decode_prefix(data, max_size=max_size)
     if position != len(data):
         raise ValueError("trailing bencoded data")
     return value
