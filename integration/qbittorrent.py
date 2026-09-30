@@ -253,7 +253,7 @@ async def run(binary, root, *, pex=False):
     qbit = Qbittorrent(binary, root, pex=pex)
     report = dict(schema_version=1, python=platform.python_version(), platform=platform.platform(),
                   scope="Loopback TCP only; no trackers/DHT/PEX/LSD/NAT mapping. Correctness, not a speed comparison.",
-                  cases=[], expected_cases=9, complete=False)
+                  cases=[], expected_cases=10 if pex else 9, complete=False)
     report["pex_enabled"] = pex
     if pex:
         report["scope"] = "Loopback TCP with PEX enabled; no trackers/DHT/LSD/NAT mapping. Correctness, not a speed comparison."
@@ -277,11 +277,11 @@ async def run(binary, root, *, pex=False):
             expected = {f.path: path.joinpath(*f.path).read_bytes() for f in meta.files} if meta.multi_file else {(): path.read_bytes()}
             fixtures.append((meta, meta_path, path, expected))
 
-        async def case(name, action):
+        async def case(name, action, *, timeout=45):
             print("Testing " + name, flush=True)
             started = perf_counter()
             try:
-                result = await asyncio.wait_for(action(), 45)
+                result = await asyncio.wait_for(action(), timeout)
                 report["cases"].append(dict(name=name, complete=True, seconds=perf_counter() - started, **(result or {})))
             except Exception as error:
                 report["cases"].append(dict(name=name, complete=False, seconds=perf_counter() - started,
@@ -362,7 +362,58 @@ async def run(binary, root, *, pex=False):
                             finally:
                                 source.close()
                 await case(f"cb-to-qbit-{kind}-{'magnet' if use_magnet else 'torrent'}", send)
-        report["complete"] = len(report["cases"]) == 9 and all(c["complete"] for c in report["cases"])
+        if pex:
+            async def discover_through_qbit():
+                meta, meta_path, path, expected = fixtures[0]
+                source = FileSource(meta, path)
+                available = source.verified.copy()
+                source.verified.clear()  # Empty partial peer; expose data only after PEX discovers it.
+                server = SeedServer(meta, source, timeout=150)
+                task = None
+                save_path = root / "qbit-pex-bridge"
+                save_path.mkdir()
+                output = root / "cb-pex-discovered"
+                try:
+                    port = await server.start()
+                    await qbit.add(meta_path, meta, save_path)
+                    await qbit.api("torrents/addPeers", {"hashes": meta.info_hash.hex(), "peers": f"127.0.0.1:{port}"})
+                    deadline = perf_counter() + 15
+                    while not server.peers:
+                        if perf_counter() >= deadline:
+                            raise TimeoutError("qBittorrent did not connect to the PEX referral seed")
+                        await asyncio.sleep(0.1)
+                    task = asyncio.create_task(download(meta, [("127.0.0.1", qbit.peer_port)], output,
+                                                        use_trackers=False, use_dht=False, use_pex=True,
+                                                        concurrency=2, timeout=90, piece_timeout=120))
+                    deadline = perf_counter() + 90
+                    while len(server.peers) < 2:
+                        if task.done():
+                            task.result()
+                            raise AssertionError("download ended before the PEX referral was used")
+                        if perf_counter() >= deadline:
+                            raise TimeoutError("qBittorrent did not deliver its connected-peer PEX referral")
+                        await asyncio.sleep(0.1)
+                    source.verified.update(available)
+                    for index in sorted(available):
+                        await server.have(index)
+                    metrics = await asyncio.wait_for(task, 20)
+                    if metrics["pex_peers"] < 1 or metrics["pex_messages_received"] < 1:
+                        raise AssertionError("transfer completed without receiving and using a PEX referral")
+                    verify(meta, output, expected)
+                    return dict(metrics=metrics)
+                finally:
+                    if task is not None:
+                        task.cancel()
+                        await asyncio.gather(task, return_exceptions=True)
+                    try:
+                        await qbit.remove(meta)
+                    finally:
+                        try:
+                            await server.close()
+                        finally:
+                            source.close()
+            await case("qbit-pex-referral-discovers-cb-seed", discover_through_qbit, timeout=140)
+        report["complete"] = len(report["cases"]) == report["expected_cases"] and all(c["complete"] for c in report["cases"])
     except Exception as error:
         report["setup_error"] = str(error)
     finally:

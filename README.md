@@ -388,11 +388,14 @@ trackers, DHT, PEX, LSD, NAT mapping, and update checks, and never attaches to y
 personal session. qBittorrent is only a test dependency. Each case has a deadline;
 failure reports include diagnostics, and the owned process/profile are cleaned up.
 Use a new report filename each run. CI uploads the JSON report even on failure.
-Add `--enable-pex` to repeat the nine cases with peer exchange enabled. CI runs
-both configurations using separate reports; these are compatibility checks,
-not a claim that every short transfer exchanges a PEX message.
+Add `--enable-pex` to repeat the nine cases and a tenth discovery case: qBittorrent
+introduces a seed whose address cbtorrent was never given. The seed reveals its
+verified pieces only after cbtorrent connects through that referral. This checks
+actual PEX traffic and scheduler admission, not only extension negotiation. CI
+runs both configurations with separate reports. The discovery case allows a
+90-second PEX deadline because update intervals vary across clients.
 
-Reports include client/library versions, nine expected cases, successes/failures,
+Reports include client/library versions, expected cases, successes/failures,
 elapsed case seconds, and cbtorrent's existing byte counters. Case seconds include
 test orchestration and disk verification; they are not download benchmarks.
 API startup, seed-readiness handshake probes, and qBittorrent resource use are
