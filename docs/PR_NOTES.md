@@ -88,7 +88,7 @@ public downloads.
 **Try yourself:** Run the cancellation-readiness test, then the nine-case harness.
 Find the resumed byte count and explain why it reduces newly received payload.
 
-## Peer recovery and endgame
+## [#15 — Peer recovery and endgame](https://github.com/frogscooper/cbtorrent/pull/15)
 
 **What changed:** Temporary disconnects, timeouts, and chokes can reconnect with
 backoff. A stalled download tail can use another peer to fetch only its missing
