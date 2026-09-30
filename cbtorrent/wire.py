@@ -42,7 +42,7 @@ def message(kind: int, payload: bytes = b"") -> bytes:
 
 
 class Peer:
-    def __init__(self, reader, writer, torrent, metrics: Metrics, timeout: float):
+    def __init__(self, reader, writer, torrent, metrics: Metrics, timeout: float, *, pex=None):
         self.reader, self.writer = reader, writer
         self.torrent, self.metrics, self.timeout = torrent, metrics, timeout
         self.available = set()
@@ -52,6 +52,8 @@ class Peer:
         self.received_bytes = 0
         self.pending = {}
         self.extensions = MetadataServer(torrent) if hasattr(torrent, "info_bytes") else None
+        self.pex = pex
+        self.handshaken = False
 
     async def read(self, size):
         try:
@@ -78,7 +80,7 @@ class Peer:
         if reply[48:] == peer_id:
             raise ValueError("self connection")
         if reply[25] & 0x10:
-            await self.send(extension_handshake(self.extensions.info))
+            await self.send(extension_handshake(self.extensions.info, pex=self.pex is not None))
         await self.send(message(2))
 
     async def receive(self):
@@ -94,6 +96,14 @@ class Peer:
             response = self.extensions.receive(payload)
             if response is not None:
                 await self.send(response)
+            if self.pex is not None:
+                if payload[0] == 0:
+                    self.pex.negotiate(payload[1:], self.extensions.remote_id)
+                    await self.pex_update()
+                elif payload[0] == 2:
+                    self.metrics.pex_received_bytes += size + 4
+                    self.metrics.pex_messages_received += 1
+                    self.pex.receive(payload[1:])
             return kind, payload  # Extension handshake may precede the bitfield.
         if kind == 7 and len(payload) >= 8:
             self.metrics.payload_received_bytes += len(payload) - 8
@@ -119,6 +129,14 @@ class Peer:
             raise ValueError("unsupported peer message")
         self.seen_message = True
         return kind, payload
+
+    async def pex_update(self):
+        if self.pex is not None:
+            data = self.pex.outgoing()
+            if data is not None:
+                self.metrics.pex_sent_bytes += len(data)
+                self.metrics.pex_messages_sent += 1
+                await self.send(data)
 
     async def ready(self):
         while self.choked or not self.available:

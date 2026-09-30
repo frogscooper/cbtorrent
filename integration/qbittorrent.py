@@ -37,7 +37,7 @@ def free_port():
 
 class Qbittorrent:
     """Own one process and disposable profile; never attach to a personal session."""
-    def __init__(self, binary, root):
+    def __init__(self, binary, root, *, pex=False):
         self.binary, self.root = str(Path(binary).resolve()), root.resolve()
         self.web_port, self.peer_port = free_port(), free_port()
         while self.peer_port == self.web_port:
@@ -46,6 +46,7 @@ class Qbittorrent:
         self.opener = build_opener(ProxyHandler({}))
         self.process = self.log = None
         self.version = self.build = None
+        self.pex = pex
 
     def _request(self, endpoint, fields=None, *, upload=None):
         headers = {"Referer": self.base + "/", "Origin": self.base}
@@ -104,6 +105,8 @@ StartUpWindowState=1
         credential = base64.b64encode(salt) + b":" + base64.b64encode(key)
         settings = settings.replace("CREDENTIAL", credential.decode("ascii"))
         settings = settings.replace("PEER_PORT", str(self.peer_port))
+        if self.pex:
+            settings = settings.replace("Session\\PeXEnabled=false", "Session\\PeXEnabled=true")
         (config / ("qBittorrent" + suffix)).write_text(settings, encoding="utf-8")
         self.log = (self.root / "qbit-process.log").open("wb")
         options = {}
@@ -134,7 +137,7 @@ StartUpWindowState=1
         if version < (4, 6):
             raise ValueError("qBittorrent 4.6+ or 5.x required")
         self.build = json.loads(await self.api("app/buildInfo"))
-        prefs = dict(dht=False, pex=False, lsd=False, upnp=False, random_port=False,
+        prefs = dict(dht=False, pex=self.pex, lsd=False, upnp=False, random_port=False,
                      listen_port=self.peer_port, current_interface_address="127.0.0.1",
                      bittorrent_protocol=1, encryption=2, queueing_enabled=False,
                      max_connec=16, max_connec_per_torrent=8,
@@ -246,11 +249,14 @@ def log_tail(path, size):
         return stream.read(size).decode("utf-8", errors="replace")
 
 
-async def run(binary, root):
-    qbit = Qbittorrent(binary, root)
+async def run(binary, root, *, pex=False):
+    qbit = Qbittorrent(binary, root, pex=pex)
     report = dict(schema_version=1, python=platform.python_version(), platform=platform.platform(),
                   scope="Loopback TCP only; no trackers/DHT/PEX/LSD/NAT mapping. Correctness, not a speed comparison.",
                   cases=[], expected_cases=9, complete=False)
+    report["pex_enabled"] = pex
+    if pex:
+        report["scope"] = "Loopback TCP with PEX enabled; no trackers/DHT/LSD/NAT mapping. Correctness, not a speed comparison."
     try:
         await qbit.start()
         report.update(qbittorrent=qbit.version, build=qbit.build)
@@ -295,7 +301,7 @@ async def run(binary, root):
                     runner = download_magnet if use_magnet else download
                     source = Magnet.parse("magnet:?xt=urn:btih:" + meta.info_hash.hex()) if use_magnet else meta
                     metrics = await runner(source, [("127.0.0.1", qbit.peer_port)], output,
-                                           use_trackers=False, use_dht=False, listen_host="127.0.0.1",
+                                           use_trackers=False, use_dht=False, use_pex=pex, listen_host="127.0.0.1",
                                            timeout=5, piece_timeout=15)
                     verify(meta, output, expected)
                     return dict(metrics=metrics)
@@ -312,7 +318,7 @@ async def run(binary, root):
                     source = Magnet.parse("magnet:?xt=urn:btih:" + meta.info_hash.hex())
                     task = asyncio.create_task(download_magnet(source, [("127.0.0.1", qbit.peer_port)], output,
                                                                progress=progress, concurrency=1, use_trackers=False,
-                                                               use_dht=False, listen_host="127.0.0.1"))
+                                                               use_dht=False, use_pex=pex, listen_host="127.0.0.1"))
                     try:
                         await task
                         raise AssertionError("download was not interrupted")
@@ -322,7 +328,7 @@ async def run(binary, root):
                     if output.exists() or not output.with_name(output.name + ".part").exists():
                         raise AssertionError("cancelled download did not preserve partial data")
                     metrics = await download_magnet(source, [("127.0.0.1", qbit.peer_port)], output,
-                                                    resume=True, use_trackers=False, use_dht=False,
+                                                    resume=True, use_trackers=False, use_dht=False, use_pex=pex,
                                                     listen_host="127.0.0.1")
                     if metrics["resumed_bytes"] <= 0 or metrics["payload_received_bytes"] != meta.length - metrics["resumed_bytes"]:
                         raise AssertionError("resume did not rehash/reuse verified pieces")
@@ -376,6 +382,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
+    parser.add_argument("--enable-pex", action="store_true", help="enable PEX among the local test peers")
     args = parser.parse_args()
     if args.report.exists():
         parser.error("report already exists; use a new name")
@@ -386,7 +393,7 @@ def main():
     if not target.is_relative_to(runtime):
         raise ValueError("test directory escaped runtime root")
     try:
-        report = asyncio.run(run(args.binary, target))
+        report = asyncio.run(run(args.binary, target, pex=args.enable_pex))
         args.report.parent.mkdir(parents=True, exist_ok=True)
         with args.report.open("x", encoding="utf-8") as stream:
             json.dump(report, stream, indent=2)

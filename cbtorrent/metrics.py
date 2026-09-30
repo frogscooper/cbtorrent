@@ -28,6 +28,11 @@ class Metrics:
     endgame_duplicate_bytes: int = 0
     endgame_verified_bytes: int = 0
     cancel_requests: int = 0
+    pex_messages_sent: int = 0
+    pex_messages_received: int = 0
+    pex_sent_bytes: int = 0
+    pex_received_bytes: int = 0
+    pex_peers: int = 0
     policy_seconds: float = 0.0
     policy_update_seconds: float = 0.0
     policy_deferrals: int = 0

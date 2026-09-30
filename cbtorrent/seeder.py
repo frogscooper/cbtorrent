@@ -84,7 +84,7 @@ class FileSource:
 
 class SeedServer:
     def __init__(self, torrent, source, *, metrics=None, peer_id=None, max_clients=32,
-                 timeout=30.0, rate=0, latency=0.0):
+                 timeout=30.0, rate=0, latency=0.0, pex_factory=None):
         if max_clients < 1 or timeout <= 0 or rate < 0 or latency < 0:
             raise ValueError("invalid seed server limits")
         if not all(math.isfinite(x) for x in (timeout, rate, latency)):
@@ -94,6 +94,7 @@ class SeedServer:
         self.peer_id = peer_id or b"-CB0002-" + os.urandom(12)
         self.max_clients, self.timeout = max_clients, timeout
         self.rate, self.latency = rate, latency
+        self.pex_factory = pex_factory if not torrent.private else None
         self.server = None
         self.tasks = set()
         self.peers = set()
@@ -112,7 +113,8 @@ class SeedServer:
         task.add_done_callback(self.tasks.discard)
 
     async def _serve(self, reader, writer):
-        peer = Peer(reader, writer, self.torrent, self.metrics, self.timeout)
+        peer = Peer(reader, writer, self.torrent, self.metrics, self.timeout,
+                    pex=self.pex_factory(writer) if self.pex_factory else None)
         queue = deque()
         wake = asyncio.Event()
         interested = False
@@ -122,8 +124,9 @@ class SeedServer:
             if reply[:20] != PROTOCOL or reply[28:48] != self.torrent.info_hash or reply[48:] == self.peer_id:
                 raise ValueError("invalid incoming handshake")
             await peer.send(PROTOCOL + RESERVED + self.torrent.info_hash + self.peer_id)
+            peer.handshaken = True
             if reply[25] & 0x10:
-                await peer.send(extension_handshake(peer.extensions.info))
+                await peer.send(extension_handshake(peer.extensions.info, pex=peer.pex is not None))
             bitfield = bytearray((len(self.torrent.hashes) + 7) // 8)
             for index in self.source.verified:
                 bitfield[index // 8] |= 128 >> (index % 8)

@@ -34,8 +34,10 @@ jobs:
           sudo apt-get install -y qbittorrent-nox
       - name: Local TCP interoperability
         run: python -m integration.qbittorrent --binary /usr/bin/qbittorrent-nox --report benchmarks/qbittorrent-ci.json
+      - name: Local TCP with peer exchange enabled
+        run: python -m integration.qbittorrent --binary /usr/bin/qbittorrent-nox --enable-pex --report benchmarks/qbittorrent-pex-ci.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: qbittorrent-interoperability
-          path: benchmarks/qbittorrent-ci.json
+          path: benchmarks/qbittorrent*-ci.json
