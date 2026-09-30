@@ -205,7 +205,15 @@ async def resolve(magnet, peers=(), *, timeout=60.0, peer_timeout=10.0,
         try:
             return await asyncio.shield(task)
         except asyncio.CancelledError:
-            await asyncio.gather(task, return_exceptions=True)
+            while not task.done():
+                try:
+                    await asyncio.shield(task)
+                except asyncio.CancelledError:
+                    continue  # Repeated UI cancel actions must not detach it.
+                except Exception:
+                    break
+            if not task.cancelled():
+                task.exception()  # Retrieve any worker error; cancellation wins.
             raise
         except (OSError, ValueError) as error:
             cache_errors.append((str(error) or type(error).__name__)[:256])
