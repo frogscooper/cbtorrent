@@ -220,12 +220,15 @@ class QueueSchedulerTests(unittest.TestCase):
             commands["Start Queue"]()
             for _ in range(3):
                 root.after.call_args.args[1]()
-            commands["Add Magnet"]()
+            commands["Add Torrent"]()
             root.protocol.call_args.args[1]()
 
         root.mainloop.side_effect = mainloop
+        def add_dialog(parent, session, on_added):
+            on_added(session.add(magnet_uri))
         with patch.dict(sys.modules, {"tkinter": tk, "tkinter.ttk": ttk}), \
-                patch("cbtorrent.gui.controller.DownloadController", return_value=controller):
+                patch("cbtorrent.gui.queue_window.DownloadController", return_value=controller), \
+                patch("cbtorrent.gui.queue_window.AddDialog", side_effect=add_dialog):
             self.assertEqual(run(session_path=self.session.path), 0)
         self.assertEqual(self.started, [self.items[1].id, self.items[0].id, self.items[2].id])
         again = Session(self.session.path)

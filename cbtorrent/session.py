@@ -26,12 +26,14 @@ class QueueItem:
     status: str
     queue_order: float
     magnet_uri: str | None = None
+    error: str | None = None
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "path": str(self.torrent_path),
             "magnet_uri": self.magnet_uri,
+            "error": self.error,
             "output": str(self.output),
             "policy": self.policy,
             "status": self.status,
@@ -51,6 +53,7 @@ class QueueItem:
         return cls(
             id=str(data["id"]),
             magnet_uri=magnet_uri,
+            error=data.get("error")[:512] if isinstance(data.get("error"), str) else None,
             torrent_path=Path(data.get("path") or data.get("torrent_path") or "."),
             output=Path(data["output"]),
             policy=str(data.get("policy") or "heuristic"),
@@ -62,9 +65,11 @@ class QueueItem:
 class Session:
     """Ordered torrent queue persisted to a JSON file."""
 
-    def __init__(self, path: Path | None = None, *, default_policy: str = "heuristic"):
+    def __init__(self, path: Path | None = None, *, default_policy: str = "heuristic",
+                 download_folder: Path | None = None):
         self.path = Path(path) if path is not None else default_session_path()
         self.default_policy = default_policy or "heuristic"
+        self.download_folder = Path(download_folder) if download_folder is not None else Path("downloads")
         self._items: dict[str, QueueItem] = {}
         self.queue_running = False
 
@@ -94,6 +99,9 @@ class Session:
             return 0
         if isinstance(raw.get("default_policy"), str) and raw["default_policy"]:
             self.default_policy = raw["default_policy"]
+        folder = raw.get("download_folder")
+        if isinstance(folder, str) and folder and len(folder) <= 4096 and "\x00" not in folder:
+            self.download_folder = Path(folder)
         self.queue_running = raw.get("queue_running") is True
         entries = raw.get("items") or []
         if not isinstance(entries, list):
@@ -125,6 +133,7 @@ class Session:
             "version": 2,
             "queue_running": self.queue_running,
             "default_policy": self.default_policy,
+            "download_folder": str(self.download_folder),
             "items": [item.to_dict() for item in self.items()],
         }
         text = json.dumps(payload, indent=2) + "\n"
@@ -144,7 +153,8 @@ class Session:
             raise
 
     def add(self, torrent_path: Path | str, output: Path | None = None, *,
-            policy: str | None = None, status: str = "queued") -> QueueItem:
+            policy: str | None = None, status: str = "queued",
+            download_folder: Path | None = None) -> QueueItem:
         from .magnet import Magnet, load_source
 
         meta = load_source(torrent_path)
@@ -155,8 +165,22 @@ class Session:
             raise ValueError(f"torrent already in session: {item_id}")
         if status not in STATUSES:
             raise ValueError(f"invalid status: {status}")
+        folder = Path(download_folder) if download_folder is not None else self.download_folder
         if output is None:
-            output = Path("downloads") / (meta.info_hash.hex() if magnet_uri else meta.name)
+            output = folder / (meta.info_hash.hex() if magnet_uri else meta.name)
+            if download_folder is not None:
+                # Reserve a fresh destination without moving an existing item's
+                # partial file. Explicit API destinations retain their semantics.
+                original = output
+                reserved = {item.output.absolute() for item in self._items.values()}
+                for n in range(1000):
+                    if n:
+                        output = original.with_name(f"{original.stem}-{n}{original.suffix}")
+                    partial = output.with_name(output.name + ".part")
+                    if output.absolute() not in reserved and not output.exists() and not partial.exists():
+                        break
+                else:
+                    raise ValueError("too many conflicting download destinations")
         else:
             output = Path(output)
         chosen = policy if policy is not None else self.default_policy
@@ -171,7 +195,14 @@ class Session:
             magnet_uri=magnet_uri,
         )
         self._items[item_id] = item
-        self.save()
+        previous_folder = self.download_folder
+        self.download_folder = folder
+        try:
+            self.save()
+        except BaseException:
+            del self._items[item_id]
+            self.download_folder = previous_folder
+            raise
         return item
 
     def remove(self, item_id: str) -> None:
@@ -193,6 +224,7 @@ class Session:
             if other.id != item_id and other.status == "downloading":
                 other.status = "paused"
         self._items[item_id].status = "downloading"
+        self._items[item_id].error = None
         self.save()
 
     def reorder(self, item_id: str, before_id: str | None) -> None:
@@ -217,10 +249,12 @@ class Session:
         self._require(item_id).policy = name
         self.save()
 
-    def set_status(self, item_id: str, status: str) -> None:
+    def set_status(self, item_id: str, status: str, *, error: str | None = None) -> None:
         if status not in STATUSES:
             raise ValueError(f"invalid status: {status}")
-        self._require(item_id).status = status
+        item = self._require(item_id)
+        item.status = status
+        item.error = error[:512] if status == "error" and isinstance(error, str) else None
         self.save()
 
     def set_queue_running(self, running: bool) -> None:

@@ -18,7 +18,16 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e .
-      - run: python -m unittest discover -s tests -v
+      - name: Linux tests with a virtual display
+        if: runner.os == 'Linux'
+        env:
+          CBTORRENT_REQUIRE_GUI_TESTS: '1'
+        run: xvfb-run -a python -m unittest discover -s tests -v
+      - name: Windows tests including hidden GUI windows
+        if: runner.os == 'Windows'
+        env:
+          CBTORRENT_REQUIRE_GUI_TESTS: '1'
+        run: python -m unittest discover -s tests -v
       - run: cbtorrent --help
   interoperability:
     runs-on: ubuntu-24.04

@@ -156,3 +156,26 @@ unavailable cache files fall back to network discovery with short error reports.
 
 **Try yourself:** Run the corrupt-partial-payload cache test. Explain why its
 metadata hit still requires downloading the damaged payload piece again.
+
+## [#18 — GUI download workflow](https://github.com/frogscooper/cbtorrent/pull/18)
+
+**What changed:** One Add dialog accepts torrent files and magnet links, lets you
+choose a download folder, and remembers that folder for later additions. Failed
+items have a separate Retry action and retain their explanation after restart.
+Open Folder reveals a directory without launching downloaded content.
+
+**How it works:** The dialog validates local input before adding a queue item.
+Session persistence saves the item and folder together; failed saves roll back
+the addition. The scheduler starts background workers and enables retry only
+after cleanup. The window is now an ordinary Python module instead of joining
+source fragments at runtime, so tests can build it and invoke real Tk buttons.
+
+**Correctness:** New additions reserve a free destination. Retry keeps its
+original destination, rehashes partial pieces, and never overwrites an existing
+completed file. Cancelling the dialog creates no payload files.
+
+**Read first:** `gui/dialogs.py`, `gui/queue_window.py`, `session.py`, and
+`tests/test_gui_workflow.py`.
+
+**Try yourself:** Run the failed-download/retry test and follow how a saved
+partial file becomes a verified completed download after reopening the window.
