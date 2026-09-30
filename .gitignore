@@ -5,6 +5,7 @@ __pycache__/
 build/
 dist/
 downloads/
+.interop-runtime/
 *.part
 benchmarks/*-summary.json
 benchmarks/*-tests.log

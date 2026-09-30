@@ -20,3 +20,22 @@ jobs:
       - run: python -m pip install -e .
       - run: python -m unittest discover -s tests -v
       - run: cbtorrent --help
+  interoperability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install independent client (test dependency only)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qbittorrent-nox
+      - name: Local TCP interoperability
+        run: python -m integration.qbittorrent --binary /usr/bin/qbittorrent-nox --report benchmarks/qbittorrent-ci.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qbittorrent-interoperability
+          path: benchmarks/qbittorrent-ci.json
