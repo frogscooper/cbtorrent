@@ -21,6 +21,13 @@ class Metrics:
     connections: int = 0
     peer_failures: int = 0
     hash_failures: int = 0
+    peer_retries: int = 0
+    peers_banned: int = 0
+    endgame_transfers: int = 0
+    endgame_requested_bytes: int = 0
+    endgame_duplicate_bytes: int = 0
+    endgame_verified_bytes: int = 0
+    cancel_requests: int = 0
     policy_seconds: float = 0.0
     policy_update_seconds: float = 0.0
     policy_deferrals: int = 0

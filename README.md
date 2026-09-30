@@ -278,8 +278,11 @@ includes any initial wait for discovery.
 | `timed` | Opt-in recovery plus a predicted time allowance for revisits. |
 
 All policies use one protocol engine, one piece scheduler, and the same connection caps.
-Corrupt, choked, disconnected, and timed-out peers are retired for that run. Policy state
-is scoped to the download. Experiment plans, ablations, and acceptance gates:
+Malformed traffic and single-source hash failures disqualify a peer for that run.
+Chokes, disconnects, and timeouts get at most two reconnects per address, with
+exponential backoff starting at 0.5 seconds (capped at 30 seconds). Successful
+pieces do not reset that failure budget. Other eligible peers continue during
+backoff. Policy state is scoped to the download. Experiment plans, ablations, and acceptance gates:
 [ML experiment](benchmarks/ML_EXPERIMENT.md),
 [recovery experiment](benchmarks/RECOVERY_EXPERIMENT.md),
 [time-budget experiment](benchmarks/TIME_BUDGET_EXPERIMENT.md).
@@ -292,6 +295,48 @@ python -m cbtorrent benchmark --trials 5 --size-mib 1 --seed 2026 --report bench
 
 These fixtures are regression and research tools. They do not model real congestion, NAT,
 public churn, or disk contention. Do not treat a localhost win as a public-swarm claim.
+
+### Peer recovery and endgame
+
+Recovery and endgame apply to all policies and GUI/magnet downloads. Headless
+downloads can set `--peer-retries 0` to fail fast or `--no-endgame` for an ablation.
+`--retry-delay`, `--endgame-delay`, and `--endgame-budget` tune the bounded timers
+and extra-request allowance. The defaults are two reconnects, 0.5-second initial
+backoff, one second without block progress, and 128 KiB of reserved helper requests.
+
+Endgame starts only when every remaining piece is claimed and the tail contains
+at most `concurrency` pieces. A helper requests only blocks still missing from
+the existing assembly. There are at most two owners per piece, one additional
+transfer slot beyond normal concurrency, and no exception to `max_connections`.
+Reservations conservatively include failed helper setup; total helper-request
+bytes cannot exceed the allowance. Cancels are sent as blocks arrive and when
+attempts stop. Raced connections close before reuse so late responses cannot
+contaminate the next piece. The piece is hash-verified and committed exactly once.
+
+A mixed-source hash failure cannot identify its bad contributor. The assembly is
+discarded and that piece is retried without endgame to identify corruption safely.
+Raced assemblies are excluded from bandit reward and service-model updates;
+per-peer times, traffic, and actual failures still count. Overall verified bytes
+remain correct, but per-peer credited bytes omit these assemblies.
+
+Reports add `peer_retries` (post-failure connection attempts), `peers_banned`
+(permanent protocol/corruption exclusions), `endgame_transfers`,
+`endgame_requested_bytes` (helper requests), `endgame_duplicate_bytes` (received
+blocks already present in a raced assembly), `endgame_verified_bytes` (committed
+raced assemblies), and `cancel_requests` (sent cancel messages). Existing wire,
+payload, waste, and completion definitions remain unchanged. Bytes still in a
+remote queue or unread socket buffer are outside application-level counters.
+
+Run the paired engine ablation with accelerated local fixtures:
+
+```bash
+python benchmarks/run_resilience.py --trials 3 --report benchmarks/resilience-local.json
+```
+
+It retains failed attempts and compares both modes using the same engine and
+heuristic, with randomized mode order. The fixtures cover a stable peer, a
+temporary disconnect, a stalled final block, and an unrecoverable disconnect.
+This isolates protocol scheduling improvements from ML policy comparisons.
 
 ## Independent-client tests
 
@@ -341,10 +386,10 @@ the first 8 unique tracker URLs. Incoming clients use a separate cap equal to
 
 ## Limits
 
-Not present: PEX, uTP, encryption, v2 torrents, endgame
-duplication, automatic NAT mapping, classic tit-for-tat upload slots. Outbound connections
-are download-oriented; uploads use the incoming listener. Peers retired after failure are
-not retried in that run. Storage and hashing run on the event loop. Publication uses an
+Not present: PEX, uTP, encryption, v2 torrents,
+automatic NAT mapping, classic tit-for-tat upload slots. Outbound connections
+are download-oriented; uploads use the incoming listener. Peer recovery is bounded
+within one run; bans and policy state do not persist across restarts. Storage and hashing run on the event loop. Publication uses an
 exclusive hard link in the same directory when the filesystem supports it; otherwise the
 completed `.part` file remains. Local fixtures and basic qBittorrent TCP transfers
 are validated; public-swarm interoperability remains open work.

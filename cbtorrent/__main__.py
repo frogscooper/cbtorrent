@@ -107,6 +107,15 @@ def build_parser():
     get.add_argument("--pipeline", type=int, default=8)
     get.add_argument("--concurrency", type=int, default=4)
     get.add_argument("--max-connections", type=int, default=16)
+    get.add_argument("--peer-retries", type=int, default=2,
+                     help="reconnections per peer after temporary failures (0..8)")
+    get.add_argument("--retry-delay", type=float, default=0.5,
+                     help="initial retry backoff in seconds")
+    get.add_argument("--no-endgame", action="store_true")
+    get.add_argument("--endgame-delay", type=float, default=1.0,
+                     help="seconds without block progress before a tail helper")
+    get.add_argument("--endgame-budget", type=int, default=131072,
+                     help="maximum reserved helper-request bytes per download")
     get.add_argument("--policy", choices=("heuristic", "bandit", "adaptive", "optimistic", "recovery", "timed"), default="heuristic")
     get.add_argument("--resume", action="store_true")
     get.add_argument("--no-trackers", action="store_true")
@@ -203,6 +212,9 @@ def main(argv=None):
                 pipeline=args.pipeline, concurrency=args.concurrency, max_connections=args.max_connections,
                 resume=args.resume, policy=policy, use_trackers=not args.no_trackers,
                 use_dht=not args.no_dht, dht_bootstrap=args.dht_bootstrap,
+                peer_retries=args.peer_retries, retry_delay=args.retry_delay,
+                endgame=not args.no_endgame, endgame_delay=args.endgame_delay,
+                endgame_budget=args.endgame_budget,
                 listen_host=args.listen_host, listen_port=args.port,
                 progress=progress if args.progress else None, **extra))
         elif args.command == "seed":
