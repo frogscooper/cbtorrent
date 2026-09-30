@@ -65,7 +65,7 @@ and `tests/test_magnet.py`.
 **Try it:** Run the corrupt-metadata fallback test. Change one byte of a peer's
 metadata and follow why the downloader never creates a `.part` file from it.
 
-## Independent-client testing
+## [#14 — Independent-client testing](https://github.com/frogscooper/cbtorrent/pull/14)
 
 **What changed:** An optional test harness downloads between cbtorrent and
 qBittorrent in both directions. Nine cases cover single files, nested directories,

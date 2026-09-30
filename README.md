@@ -299,7 +299,8 @@ CI also runs nine transfers against qBittorrent on loopback TCP: single files an
 directories, `.torrent` and magnet inputs in both directions, and an interrupted
 directory magnet download resumed from rehashed pieces. Every completed payload is
 checked against the original paths/bytes and rehashed from disk. Windows qBittorrent
-5.1.0 with libtorrent 1.2.20 passed all nine locally. This covers basic interoperability,
+5.1.0 with libtorrent 1.2.20 passed all nine locally; Linux qBittorrent 4.6.3 with
+libtorrent 2.0.10 passed all nine in CI. This covers basic interoperability,
 not public-swarm performance, tracker/DHT interoperability, or every client version.
 
 To repeat it from the repository root, install qBittorrent 4.6+ or 5.x separately:
