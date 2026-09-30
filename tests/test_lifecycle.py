@@ -80,6 +80,10 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                     if fault == "malformed":
                         writer.write(struct.pack("!IB", 2, 0) + b"x")
                         await writer.drain()
+                        # Keep the socket open until the client rejects the
+                        # frame. Closing with unread pipelined requests can
+                        # reset TCP before Python 3.11 exposes the bad bytes.
+                        await reader.read()
                         return
                     if hold_all or (hold_last and offset + length == len(self.data)):
                         continue
