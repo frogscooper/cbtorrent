@@ -31,6 +31,8 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
         default_policy=policy_name if policy_name in POLICIES else "heuristic",
     )
     restored = session.load()
+    from ..metadata_cache import MetadataCache
+    metadata_cache = MetadataCache(session.path.parent / "metadata")
     controller = DownloadController()
     metas: dict[str, Torrent] = {}
     selected_id: list[str | None] = [None]
@@ -253,7 +255,7 @@ def run(torrent: Path | None = None, output: Path | None = None, *, peers=(),
                 concurrency=download_opts["concurrency"],
                 max_connections=download_opts["max_connections"],
                 policy=POLICIES.get(item.policy, POLICIES["heuristic"])(),
-                item_id=item.id, metadata_timeout=metadata_timeout)
+                item_id=item.id, metadata_timeout=metadata_timeout, metadata_cache=metadata_cache)
         except (OSError, ValueError, RuntimeError) as error:
             set_status(f"Error: {error}")
             return False

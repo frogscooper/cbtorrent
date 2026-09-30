@@ -48,7 +48,8 @@ class DownloadController:
     def start(self, torrent: Torrent | Magnet, peers, output: Path, *, resume=False,
               use_trackers=True, listen_host="0.0.0.0", listen_port=0,
               timeout=15.0, piece_timeout=120.0, pipeline=8, concurrency=4,
-              max_connections=16, policy=None, item_id=None, use_dht=False, dht_bootstrap=None, metadata_timeout=60.0):
+              max_connections=16, policy=None, item_id=None, use_dht=False, dht_bootstrap=None,
+              metadata_timeout=60.0, metadata_cache=None):
         if self.busy:
             raise RuntimeError("download already running")
         self._cancel_requested.clear()
@@ -73,7 +74,8 @@ class DownloadController:
                 def resolved(meta):
                     self.resolved_torrent = meta
                 runner = download_magnet if isinstance(torrent, Magnet) else download
-                extra = {"metadata_timeout": metadata_timeout, "on_metadata": resolved} if isinstance(torrent, Magnet) else {}
+                extra = {"metadata_timeout": metadata_timeout, "on_metadata": resolved,
+                         "metadata_cache": metadata_cache} if isinstance(torrent, Magnet) else {}
                 self._task = loop.create_task(runner(
                     torrent, peers, self.output, timeout=timeout,
                     piece_timeout=piece_timeout, pipeline=pipeline,
