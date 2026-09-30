@@ -94,6 +94,8 @@ WebUI\UseUPnP=false
 Connection\UPnP=false
 Connection\ResolvePeerCountries=false
 Advanced\updateCheck=false
+[LegalNotice]
+Accepted=true
 [GUI]
 StartUpWindowState=1
 """
@@ -112,7 +114,7 @@ StartUpWindowState=1
             options.update(startupinfo=startup, creationflags=subprocess.CREATE_NO_WINDOW)
         env = {k: v for k, v in os.environ.items() if not k.startswith("QBT_")}
         self.process = subprocess.Popen(
-            [self.binary, "--profile=" + str(profile), "--confirm-legal-notice",
+            [self.binary, "--profile=" + str(profile),
              "--webui-port=" + str(self.web_port)],
             stdin=subprocess.DEVNULL, stdout=self.log, stderr=self.log, env=env, **options)
         deadline = perf_counter() + 20
