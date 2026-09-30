@@ -293,6 +293,35 @@ python -m cbtorrent benchmark --trials 5 --size-mib 1 --seed 2026 --report bench
 These fixtures are regression and research tools. They do not model real congestion, NAT,
 public churn, or disk contention. Do not treat a localhost win as a public-swarm claim.
 
+## Independent-client tests
+
+CI also runs nine transfers against qBittorrent on loopback TCP: single files and
+directories, `.torrent` and magnet inputs in both directions, and an interrupted
+directory magnet download resumed from rehashed pieces. Every completed payload is
+checked against the original paths/bytes and rehashed from disk. Windows qBittorrent
+5.1.0 with libtorrent 1.2.20 passed all nine locally; Linux qBittorrent 4.6.3 with
+libtorrent 2.0.10 passed all nine in CI. This covers basic interoperability,
+not public-swarm performance, tracker/DHT interoperability, or every client version.
+
+To repeat it from the repository root, install qBittorrent 4.6+ or 5.x separately:
+
+```bash
+python -m integration.qbittorrent --binary /usr/bin/qbittorrent-nox --report benchmarks/qbittorrent-local.json
+```
+
+On Windows use `--binary "C:\Program Files\qBittorrent\qbittorrent.exe"`.
+The harness launches its own hidden process with a disposable profile, disables
+trackers, DHT, PEX, LSD, NAT mapping, and update checks, and never attaches to your
+personal session. qBittorrent is only a test dependency. Each case has a deadline;
+failure reports include diagnostics, and the owned process/profile are cleaned up.
+Use a new report filename each run. CI uploads the JSON report even on failure.
+
+Reports include client/library versions, nine expected cases, successes/failures,
+elapsed case seconds, and cbtorrent's existing byte counters. Case seconds include
+test orchestration and disk verification; they are not download benchmarks.
+API startup, seed-readiness handshake probes, and qBittorrent resource use are
+outside cbtorrent's transfer counters. Remote API byte statistics can lag completion.
+
 ## Implemented
 
 - Bounded bencoding; single-file and multi-file v1 metainfo; canonical info hashing
@@ -317,8 +346,8 @@ duplication, automatic NAT mapping, classic tit-for-tat upload slots. Outbound c
 are download-oriented; uploads use the incoming listener. Peers retired after failure are
 not retried in that run. Storage and hashing run on the event loop. Publication uses an
 exclusive hard link in the same directory when the filesystem supports it; otherwise the
-completed `.part` file remains. Local fixtures are validated; independent-client and
-public-swarm interoperability are still open work.
+completed `.part` file remains. Local fixtures and basic qBittorrent TCP transfers
+are validated; public-swarm interoperability remains open work.
 
 DHT state is scoped to the running download/seed session. Persistent routing tables,
 full bucket refresh/replacement probing, BEP 42 node-ID hardening, IPv6 DHT, and TCP
@@ -330,6 +359,7 @@ not a complete long-lived DHT router.
 See [AGENTS.md](AGENTS.md) for architecture notes and shared-agent working rules.
 Short technical explanations and learning exercises live in [PR notes](docs/PR_NOTES.md).
 CI runs the unit suite and the installed CLI on Windows and Linux (Python 3.11 and 3.13).
+An additional Linux job checks local qBittorrent interoperability.
 
 Protocol references: [BEP 3](https://www.bittorrent.org/beps/bep_0003.html),
 [BEP 23](https://www.bittorrent.org/beps/bep_0023.html),

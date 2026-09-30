@@ -64,3 +64,26 @@ and `tests/test_magnet.py`.
 
 **Try it:** Run the corrupt-metadata fallback test. Change one byte of a peer's
 metadata and follow why the downloader never creates a `.part` file from it.
+
+## [#14 — Independent-client testing](https://github.com/frogscooper/cbtorrent/pull/14)
+
+**What changed:** An optional test harness downloads between cbtorrent and
+qBittorrent in both directions. Nine cases cover single files, nested directories,
+empty files, torrent files, magnets, and cancelling/resuming a directory download.
+CI runs the same harness and saves its JSON report, including failures.
+
+**How it works:** The harness starts a separate qBittorrent process with a disposable
+profile and uses its local Web API to add torrents and connect explicit peers.
+Discovery and update checks are disabled. Before downloads, a bounded handshake
+probe waits for the seed to actually accept connections: an API progress flag can
+be ready earlier. Completed files are compared with the fixtures and rehashed.
+
+**Tradeoff:** This needs an external executable for integration testing; the app
+still uses only the standard library. Loopback correctness does not prove faster
+public downloads.
+
+**Read first:** `integration/qbittorrent.py`, `tests/test_interop.py`, and the
+`interoperability` job in `.github/workflows/tests.yml`.
+
+**Try yourself:** Run the cancellation-readiness test, then the nine-case harness.
+Find the resumed byte count and explain why it reduces newly received payload.
