@@ -87,3 +87,26 @@ public downloads.
 
 **Try yourself:** Run the cancellation-readiness test, then the nine-case harness.
 Find the resumed byte count and explain why it reduces newly received payload.
+
+## [#15 — Peer recovery and endgame](https://github.com/frogscooper/cbtorrent/pull/15)
+
+**What changed:** Temporary disconnects, timeouts, and chokes can reconnect with
+backoff. A stalled download tail can use another peer to fetch only its missing
+blocks. Both features share the normal connection limits and work with magnets.
+
+**How it works:** The scheduler tracks a finite failure budget per address and
+lets healthy peers work during cooldown. Endgame adds at most one transfer slot,
+shares a piece buffer between two owners, and reserves a limited byte allowance.
+Arriving blocks trigger cancel messages to the other owner. Raced connections
+close before reuse, preventing late responses from leaking into another piece.
+
+**Correctness:** Only `client.py` commits a fully hash-verified assembly, once.
+If mixed-source data fails its hash, the piece is retried without mixing sources.
+Mixed assemblies do not train bandit rewards or peer service-time models because
+their contribution cannot be attributed reliably.
+
+**Read first:** `transfer()` and the endgame loop in `client.py`, `PieceBuffer`
+and `download_piece()` in `wire.py`, then `tests/test_lifecycle.py`.
+
+**Try yourself:** Run the missing-block endgame test. Check its cancel message and
+why the helper requests one block rather than the whole piece.

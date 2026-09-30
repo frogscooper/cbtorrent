@@ -9,6 +9,34 @@ PROTOCOL = b"\x13BitTorrent protocol"
 BLOCK_SIZE = 16 * 1024
 
 
+class PieceBuffer:
+    """One bounded assembly shared by at most two endgame connections.
+
+    All mutation runs on the event loop. Only client.py verifies and commits it.
+    """
+    def __init__(self, size):
+        self.data = bytearray(size)
+        self.blocks = tuple((offset, min(BLOCK_SIZE, size - offset))
+                            for offset in range(0, size, BLOCK_SIZE))
+        self.received = set()
+        self.received_bytes = 0
+        self.owners = set()
+        self.raced = False
+        self.invalid = False
+
+    @property
+    def missing_bytes(self):
+        return len(self.data) - self.received_bytes
+
+    def accept(self, offset, block):
+        if offset in self.received:
+            return False
+        self.data[offset:offset + len(block)] = block
+        self.received.add(offset)
+        self.received_bytes += len(block)
+        return True
+
+
 def message(kind: int, payload: bytes = b"") -> bytes:
     return struct.pack("!IB", 1 + len(payload), kind) + payload
 
@@ -22,6 +50,7 @@ class Peer:
         self.seen_message = False
         self.sent_bytes = 0
         self.received_bytes = 0
+        self.pending = {}
         self.extensions = MetadataServer(torrent) if hasattr(torrent, "info_bytes") else None
 
     async def read(self, size):
@@ -95,35 +124,61 @@ class Peer:
         while self.choked or not self.available:
             await self.receive()
 
-    async def download_piece(self, index, pipeline, on_block=None):
-        size = self.torrent.piece_size(index)
-        blocks = [(offset, min(BLOCK_SIZE, size - offset)) for offset in range(0, size, BLOCK_SIZE)]
-        pending = {}
-        result = bytearray(size)
-        cursor = received = 0
-        while received < size:
-            while not self.choked and cursor < len(blocks) and len(pending) < pipeline:
-                offset, length = blocks[cursor]
-                pending[offset] = length
-                await self.send(message(6, struct.pack("!III", index, offset, length)))
-                cursor += 1
-            kind, payload = await self.receive()
-            if kind == 0:
-                # Reconnect and retry this piece: old requests may be discarded on choke.
-                raise ConnectionError("peer choked during piece transfer")
-            if kind == 7:
-                if len(payload) < 8:
-                    raise ValueError("truncated piece message")
-                piece, offset = struct.unpack("!II", payload[:8])
-                block = payload[8:]
-                if piece != index or offset not in pending or len(block) != pending[offset]:
-                    raise ValueError("unsolicited or incorrectly sized block")
-                del pending[offset]
-                result[offset:offset + len(block)] = block
-                received += len(block)
-                if on_block is not None:
-                    on_block(received)
-        return bytes(result)
+    def cancel_block(self, index, offset):
+        length = self.pending.get((index, offset))
+        if length is None:
+            return
+        data = message(8, struct.pack("!III", index, offset, length))
+        self.writer.write(data)
+        self.metrics.wire_sent_bytes += len(data)
+        self.sent_bytes += len(data)
+        self.metrics.cancel_requests += 1
+
+    async def download_piece(self, index, pipeline, on_block=None, *, buffer=None,
+                             on_data=None, endgame=False):
+        buffer = buffer or PieceBuffer(self.torrent.piece_size(index))
+        cursor = 0
+        try:
+            while buffer.missing_bytes:
+                while not self.choked and cursor < len(buffer.blocks) and len(self.pending) < pipeline:
+                    offset, length = buffer.blocks[cursor]
+                    cursor += 1
+                    if offset in buffer.received:
+                        continue
+                    self.pending[index, offset] = length
+                    if endgame:
+                        self.metrics.endgame_requested_bytes += length
+                    await self.send(message(6, struct.pack("!III", index, offset, length)))
+                kind, payload = await self.receive()
+                if kind == 0:
+                    raise ConnectionError("peer choked during piece transfer")
+                if kind == 7:
+                    if len(payload) < 8:
+                        raise ValueError("truncated piece message")
+                    piece, offset = struct.unpack("!II", payload[:8])
+                    block = payload[8:]
+                    if piece != index or len(block) != self.pending.get((piece, offset)):
+                        raise ValueError("unsolicited or incorrectly sized block")
+                    del self.pending[piece, offset]
+                    if buffer.accept(offset, block):
+                        if on_block is not None:
+                            on_block(buffer.received_bytes)
+                        if on_data is not None:
+                            on_data(offset)
+                    elif buffer.raced:
+                        self.metrics.endgame_duplicate_bytes += len(block)
+            return bytes(buffer.data)
+        finally:
+            # Late replies remain legal only on this attempt. The client closes
+            # interrupted/raced connections before reusing the peer address.
+            try:
+                for piece, offset in tuple(self.pending):
+                    self.cancel_block(piece, offset)
+                if self.pending:
+                    await asyncio.wait_for(self.writer.drain(), min(self.timeout, 0.25))
+            except (OSError, asyncio.TimeoutError):
+                pass
+            self.pending.clear()
 
     async def close(self):
         self.writer.close()
