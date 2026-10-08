@@ -180,7 +180,7 @@ completed file. Cancelling the dialog creates no payload files.
 **Try yourself:** Run the failed-download/retry test and follow how a saved
 partial file becomes a verified completed download after reopening the window.
 
-## Release housekeeping — version 0.3.0
+## [#19 — Release housekeeping for 0.3.0](https://github.com/frogscooper/cbtorrent/pull/19)
 
 **What changed:** The package version moves from 0.2.0 to 0.3.0, a `CHANGELOG.md`
 lists what shipped since the first instrumented client, and benchmark `.log` files
