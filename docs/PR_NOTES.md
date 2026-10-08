@@ -179,3 +179,22 @@ completed file. Cancelling the dialog creates no payload files.
 
 **Try yourself:** Run the failed-download/retry test and follow how a saved
 partial file becomes a verified completed download after reopening the window.
+
+## [#19 — Release housekeeping for 0.3.0](https://github.com/frogscooper/cbtorrent/pull/19)
+
+**What changed:** The package version moves from 0.2.0 to 0.3.0, a `CHANGELOG.md`
+lists what shipped since the first instrumented client, and benchmark `.log` files
+are ignored by Git. No runtime code changes.
+
+**How it works:** `pyproject.toml` is the single source of the version. The
+changelog groups the merged pull requests (#1–#18) under it. Logs are scratch
+output from test and benchmark runs; JSON reports are the measurement evidence, so
+they are still added deliberately, with `git add -f` if a pattern ever hides one.
+
+**Tradeoff:** A version number is only a label. The tag should point at the commit
+that contains this bump, so create it after this change is on `main`, not before.
+
+**Read first:** `CHANGELOG.md`, then the `version` line in `pyproject.toml`.
+
+**Try yourself:** Run `git log --oneline v0.3.0..main` after tagging, then make a
+small change and watch it appear. This shows what a tag actually records: one commit.
