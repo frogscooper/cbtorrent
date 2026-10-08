@@ -9,3 +9,6 @@ downloads/
 *.part
 benchmarks/*-summary.json
 benchmarks/*-tests.log
+
+# Benchmark scratch output (test and benchmark logs); commit JSON evidence deliberately
+benchmarks/*.log

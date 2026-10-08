@@ -474,7 +474,7 @@ not a complete long-lived DHT router.
 ## Contributing
 
 See [AGENTS.md](AGENTS.md) for architecture notes and shared-agent working rules.
-Short technical explanations and learning exercises live in [PR notes](docs/PR_NOTES.md).
+Short technical explanations and learning exercises live in [PR notes](docs/PR_NOTES.md); release history is in the [changelog](CHANGELOG.md).
 CI runs the unit suite and the installed CLI on Windows and Linux (Python 3.11 and 3.13).
 An additional Linux job checks local qBittorrent interoperability.
 
