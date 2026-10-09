@@ -67,6 +67,10 @@ class Peer:
         return data
 
     async def send(self, data):
+        # Writing to a dropped connection only makes asyncio log
+        # "socket.send() raised exception." for every further write.
+        if self.writer.is_closing():
+            raise ConnectionResetError("connection already closed")
         self.writer.write(data)
         self.metrics.wire_sent_bytes += len(data)
         self.sent_bytes += len(data)
@@ -144,8 +148,8 @@ class Peer:
 
     def cancel_block(self, index, offset):
         length = self.pending.get((index, offset))
-        if length is None:
-            return
+        if length is None or self.writer.is_closing():
+            return  # nothing to cancel on a dropped connection
         data = message(8, struct.pack("!III", index, offset, length))
         self.writer.write(data)
         self.metrics.wire_sent_bytes += len(data)

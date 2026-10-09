@@ -9,6 +9,7 @@ from time import perf_counter
 
 from .metrics import Metrics
 from .dht import DhtDiscovery
+from .diagnostics import describe_error, install_reset_filter
 from .observe import build_snapshot
 from .policy import ActiveTransfer, Observation, SchedulingContext, ThroughputPolicy
 from .pex import PexSession
@@ -72,6 +73,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
     endgame_reserved = 0
     schedule_changed = asyncio.Event()
     peer_errors, tracker_errors = [], []
+    failure_phases = {}
     peer_id = b"-CB0002-" + os.urandom(12)
     pex_sources, pex_hosts = {}, set()
     pex_task = None
@@ -121,6 +123,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         result["peer_observations"] = {f"{host}:{peer_port}": asdict(value)
                                        for (host, peer_port), value in observations.items()}
         result["peer_errors"] = list(peer_errors)
+        result["peer_failure_phases"] = dict(failure_phases)
         result["tracker_errors"] = list(tracker_errors)
         result["dht_errors"] = list(discovery.errors) if discovery else []
         if hasattr(policy, "diagnostics"):
@@ -160,7 +163,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
             metrics.tracker_failures += 1
             intervals[url] = perf_counter() + 60
             if len(tracker_errors) < 20:
-                tracker_errors.append(f"{url}: {error}")
+                tracker_errors.append(f"{url}: {describe_error(error)}")
 
     async def refresh_trackers():
         while True:
@@ -170,8 +173,9 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 if intervals[url] <= perf_counter():
                     await tracker_update(url, "" if url in started_trackers else "started")
 
-    async def retire(address, error):
+    async def retire(address, error, phase, detail=None):
         metrics.peer_failures += 1
+        failure_phases[phase] = failure_phases.get(phase, 0) + 1
         failures[address] = failures.get(address, 0) + 1
         permanent = isinstance(error, ValueError) and not isinstance(error, MixedPieceError)
         if permanent or failures[address] > peer_retries:
@@ -182,7 +186,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         else:
             retry_at[address] = perf_counter() + min(30, retry_delay * 2 ** (failures[address] - 1))
         if len(peer_errors) < 30:
-            peer_errors.append(f"{address[0]}:{address[1]}: {error}")
+            peer_errors.append(f"{address[0]}:{address[1]}: {phase}: {detail or describe_error(error)}")
         peer = sessions.pop(address, None)
         if peer is not None:
             await peer.close()
@@ -199,8 +203,10 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         work = None
         completed = False
         interrupted = False
+        # The failure phase separates dead addresses from slow or choking peers.
+        phase, deadline = "connect", None
         try:
-            async with asyncio.timeout(piece_timeout):
+            async with asyncio.timeout(piece_timeout) as deadline:
                 if peer is None:
                     if address in retry_at:
                         metrics.peer_retries += 1
@@ -209,9 +215,12 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                     reader, writer = await asyncio.wait_for(asyncio.open_connection(*address), timeout)
                     peer = Peer(reader, writer, torrent, metrics, timeout, pex=make_pex(writer))
                     sessions[address] = peer
+                    phase = "handshake"
                     await peer.handshake(peer_id)
+                    phase = "unchoke"
                     await peer.ready()
                     peer.handshaken = True
+                phase = "wait"
                 if duplicate is not None:
                     if (duplicate not in remaining or duplicate not in peer.available
                             or duplicate not in pieces or pieces[duplicate].invalid):
@@ -250,12 +259,14 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                             other = sessions.get(owner)
                             if owner != address and other is not None:
                                 other.cancel_block(index, offset)
+                phase = "piece"
                 data = await peer.download_piece(index, pipeline, on_block=on_block,
                                                   buffer=work, on_data=on_data,
                                                   endgame=duplicate is not None)
                 transfer_seconds = perf_counter() - transfer_started
                 if work.invalid or index not in remaining:
                     return
+                phase = "verify"
                 if sha1(data).digest() != torrent.hashes[index]:
                     metrics.hash_failures += 1
                     work.invalid = True
@@ -280,6 +291,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 for other_task, owner in tuple(tasks.items()):
                     if owner in work.owners and other_task is not asyncio.current_task():
                         other_task.cancel()
+                phase = "have"
                 await server.have(index)
                 await peer.send(message(4, index.to_bytes(4, "big")))
                 if progress is not None:
@@ -287,7 +299,13 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 emit()
         except (OSError, ValueError, asyncio.TimeoutError, asyncio.IncompleteReadError) as error:
             failed = True
-            await retire(address, error)
+            detail = None
+            if isinstance(error, TimeoutError):
+                limit = piece_timeout if deadline is not None and deadline.expired() else timeout
+                detail = f"timed out after {limit:g}s"
+            if phase in ("piece", "verify") and index is not None:
+                detail = f"piece {index}: {detail or describe_error(error)}"
+            await retire(address, error, phase, detail)
         except asyncio.CancelledError:
             interrupted = True
             raise
@@ -320,6 +338,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 policy.attempt_finished(address, perf_counter() - started)
                 metrics.policy_update_seconds += perf_counter() - update_started
 
+    install_reset_filter()
     try:
         storage = Storage(torrent, output, resume=resume)
         remaining = set(range(len(torrent.hashes))) - storage.verified

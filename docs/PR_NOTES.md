@@ -198,3 +198,27 @@ that contains this bump, so create it after this change is on `main`, not before
 
 **Try yourself:** Run `git log --oneline v0.3.0..main` after tagging, then make a
 small change and watch it appear. This shows what a tag actually records: one commit.
+
+## Clear failure reports and a DHT lookup that converges
+
+**What changed:** Peer errors now say which step failed (`connect`, `handshake`,
+`unchoke`, `piece N`, ...) and which time limit expired, and `peer_failure_phases`
+counts them all. `dht_errors` samples failed queries and explains empty lookups.
+Windows no longer prints a traceback when a peer resets a closing socket, and we
+stop writing to dropped connections.
+
+**How it works:** `diagnostics.py` turns any exception into a non-empty line and
+filters only asyncio's `_call_connection_lost` reset callback. The DHT lookup keeps
+three responsive queries running, swaps far shortlist entries for closer referrals,
+and asks a bootstrap router `find_node` when its reply names one address many times.
+
+**Tradeoff:** KRPC replies may use unsorted keys, but `.torrent` decoding stays
+strict because the info hash depends on exact bytes.
+
+**Read first:** `cbtorrent/diagnostics.py`, `discover()` in `cbtorrent/dht.py`, then
+`tests/test_diagnostics.py`.
+
+**Try yourself:** In `admit()`, replace the eviction with a plain `return` when the
+shortlist is full, then run
+`python -m unittest discover -s tests -p test_diagnostics.py -k displaces`.
+Explain from the failure why that rule never reaches the node that holds peers.
