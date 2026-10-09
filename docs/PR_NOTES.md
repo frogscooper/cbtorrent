@@ -199,7 +199,7 @@ that contains this bump, so create it after this change is on `main`, not before
 **Try yourself:** Run `git log --oneline v0.3.0..main` after tagging, then make a
 small change and watch it appear. This shows what a tag actually records: one commit.
 
-## Clear failure reports and a DHT lookup that converges
+## [#20 — Clear failure reports and a DHT lookup that converges](https://github.com/frogscooper/cbtorrent/pull/20)
 
 **What changed:** Peer errors now say which step failed (`connect`, `handshake`,
 `unchoke`, `piece N`, ...) and which time limit expired, and `peer_failure_phases`
