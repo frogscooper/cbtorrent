@@ -6,6 +6,13 @@ is pre-1.0 and experimental: minor versions may change CLI flags and report form
 
 ## Unreleased
 
+### Changed
+
+- Connection attempts run ahead of transfer slots (up to 8 half-open), so
+  unreachable addresses no longer stall downloads at startup. A peer's first
+  observation now excludes its connection setup time; see README "Connection
+  dial-ahead".
+
 ### Fixed
 
 - `dht_errors` now samples failed queries, bootstrap DNS failures, and empty or
