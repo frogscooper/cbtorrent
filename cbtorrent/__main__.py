@@ -7,6 +7,7 @@ from pathlib import Path
 from .benchmark import run_benchmark
 from .client import DownloadError, download
 from .dht import DhtDiscovery
+from .diagnostics import describe_error, install_reset_filter
 from .metainfo import Torrent, create
 from .magnet import Magnet, load_source, download_magnet
 from .metrics import Metrics
@@ -45,9 +46,10 @@ async def seed_file(args):
             started.add(url)
             next_updates[url] = asyncio.get_running_loop().time() + result.interval
         except (OSError, ValueError, asyncio.TimeoutError) as error:
-            print(f"Tracker: {error}", file=sys.stderr)
+            print(f"Tracker: {url}: {describe_error(error)}", file=sys.stderr)
             next_updates[url] = asyncio.get_running_loop().time() + 60
 
+    install_reset_filter()
     try:
         port = await server.start(args.listen_host, args.port)
         if not args.no_dht and not torrent.private:

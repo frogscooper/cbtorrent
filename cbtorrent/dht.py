@@ -14,14 +14,23 @@ from dataclasses import dataclass
 from time import monotonic
 
 from .bencode import decode, encode
+from .diagnostics import describe_error
 from .metrics import Metrics
 
 K, ALPHA = 8, 3
-MAX_PACKET = 1200
+# A query unanswered after SLOW_QUERY seconds stops holding one of the ALPHA
+# lookup slots (its late reply still counts); at most MAX_IN_FLIGHT overlap.
+SLOW_QUERY, MAX_IN_FLIGHT = 1.0, 8
+# Sent packets stay under 1200 bytes. Replies from nodes holding many peers can
+# be larger, so accept one unfragmented Ethernet-sized datagram (plus slack).
+MAX_PACKET, MAX_DATAGRAM = 1200, 2048
 MAX_CANDIDATES, MAX_QUERIES, MAX_PEERS = 64, 32, 200
 MAX_HASHES, PEERS_PER_HASH = 128, 50
+MAX_ERRORS, MAX_QUERY_ERRORS = 20, 8
 NODE_TTL, PEER_TTL, TOKEN_PERIOD = 900, 1800, 300
-DEFAULT_BOOTSTRAP = (("dht.transmissionbt.com", 6881), ("router.utorrent.com", 6881))
+REFRESH_SECONDS, RETRY_SECONDS = 300, 60
+DEFAULT_BOOTSTRAP = (("dht.transmissionbt.com", 6881), ("router.bittorrent.com", 6881),
+                     ("router.utorrent.com", 6881), ("dht.libtorrent.org", 25401))
 
 
 def identity(value):
@@ -40,6 +49,10 @@ def endpoint(host, port):
 
 def xor_distance(a, b):
     return int.from_bytes(identity(a), "big") ^ int.from_bytes(identity(b), "big")
+
+
+def shared_prefix_bits(a, b):
+    return 160 - xor_distance(a, b).bit_length()
 
 
 def compact_peer(address):
@@ -169,6 +182,17 @@ class DhtNode:
         self._closed = False
         self._lost = asyncio.Event()
         self._credit, self._credit_time = 100.0, clock()
+        self.errors = []
+        self._query_errors = 0
+
+    def note(self, text, *, query=False):
+        """Keep a bounded sample: a few query failures, then lookup summaries."""
+        if query:
+            if self._query_errors >= MAX_QUERY_ERRORS:
+                return
+            self._query_errors += 1
+        if len(self.errors) < MAX_ERRORS:
+            self.errors.append(text)
 
     @property
     def port(self):
@@ -223,8 +247,13 @@ class DhtNode:
                         self._pending.pop(tid, None)
                         if not future.done():
                             future.cancel()
-        except (OSError, ValueError, TimeoutError):
+        except (OSError, ValueError, TimeoutError) as error:
             self.metrics.dht_failures += 1
+            if not self._closed:
+                reason = (f"no reply within {self.query_timeout:g}s" if isinstance(error, TimeoutError)
+                          else describe_error(error))
+                self.note(f"{method.decode('ascii', 'replace')} {address[0]}:{address[1]}: {reason}",
+                          query=True)
             raise
 
     def _token(self, host, info_hash, epoch):
@@ -280,11 +309,12 @@ class DhtNode:
         if self._closed:
             return
         self.metrics.dht_received_bytes += len(data)
-        if len(data) > MAX_PACKET:
+        if len(data) > MAX_DATAGRAM:
             return
         try:
             address = endpoint(*address)
-            msg = decode(data, max_size=MAX_PACKET)
+            # Some deployed clients emit unsorted keys; KRPC replies are never hashed.
+            msg = decode(data, max_size=MAX_DATAGRAM, sorted_keys=False)
             if not isinstance(msg, dict):
                 return
             tid, kind = msg.get(b"t"), msg.get(b"y")
@@ -324,19 +354,21 @@ class DhtNode:
             return
 
     async def _resolve(self):
-        seeds = []
-        for host, port in self.bootstrap_hosts:
+        async def resolve(host, port):
             try:
                 async with asyncio.timeout(self.query_timeout):
                     infos = await asyncio.get_running_loop().getaddrinfo(
                         host, port, family=socket.AF_INET, type=socket.SOCK_DGRAM)
-                for info in infos[:4]:
-                    address = endpoint(*info[4][:2])
-                    if address not in seeds:
-                        seeds.append(address)
-            except (OSError, ValueError, TimeoutError):
+                return [endpoint(*info[4][:2]) for info in infos[:4]]
+            except (OSError, ValueError, TimeoutError) as error:
                 self.metrics.dht_failures += 1
-        return seeds
+                reason = (f"DNS timed out after {self.query_timeout:g}s"
+                          if isinstance(error, TimeoutError) else describe_error(error))
+                self.note(f"bootstrap {host}:{port}: {reason}")
+                return []
+        # One slow resolver must not delay the others; keep the configured order.
+        results = await asyncio.gather(*(resolve(host, port) for host, port in self.bootstrap_hosts))
+        return list(dict.fromkeys(address for addresses in results for address in addresses))
 
     async def discover(self, info_hash, *, port=None, timeout=15.0, on_peers=None):
         """Bounded XOR lookup; publish peers as replies arrive, then announce.
@@ -349,13 +381,38 @@ class DhtNode:
             raise ValueError("DHT lookup timeout must be positive and finite")
         if port is not None and (type(port) is not int or not 1 <= port <= 65535):
             raise ValueError("invalid DHT announce port")
-        peers, tokens, queried = {}, {}, set()
+        peers, tokens, queried, in_flight, launched = {}, {}, set(), set(), {}
+        seeds = set()
+        loop = asyncio.get_running_loop()
+        replies, closest = 0, None
         candidates = {c.address: c.node_id for c in self.table.closest(info_hash, MAX_CANDIDATES)}
 
+        def distance(address):
+            node_id = candidates[address]
+            return -1 if node_id is None else xor_distance(node_id, info_hash)  # bootstrap first
+
+        def admit(address, node_id):
+            # A full shortlist trades its farthest unqueried entry for a closer
+            # referral. Rejecting all late referrals would stall convergence a
+            # few hops from the bootstrap nodes, before reaching peer holders.
+            if node_id == self.node_id or address in candidates:
+                return
+            waiting = [a for a in candidates if a not in queried]
+            if len(waiting) >= MAX_CANDIDATES:
+                farthest = max(waiting, key=distance)
+                if distance(farthest) <= xor_distance(node_id, info_hash):
+                    return
+                del candidates[farthest]
+            candidates[address] = node_id
+
         async def probe(address):
+            nonlocal replies, closest
             try:
                 result = await self.query(address, b"get_peers", {b"info_hash": info_hash})
                 candidates[address] = result[b"id"]
+                replies += 1
+                if closest is None or xor_distance(result[b"id"], info_hash) < xor_distance(closest, info_hash):
+                    closest = result[b"id"]
                 token = result.get(b"token")
                 if isinstance(token, bytes) and 0 < len(token) <= 64:
                     tokens[address] = (result[b"id"], token)
@@ -374,10 +431,17 @@ class DhtNode:
                     self.metrics.dht_peers += len(new)
                     if on_peers is not None:
                         on_peers(tuple(new))
-                for node_id, host, node_port in compact_nodes(result.get(b"nodes", b"")):
-                    referral = (host, node_port)
-                    if node_id != self.node_id and referral not in candidates and len(candidates) < MAX_CANDIDATES:
-                        candidates[referral] = node_id
+                referrals = compact_nodes(result.get(b"nodes", b""))
+                if address in seeds and len({(h, p) for _, h, p in referrals}) < K // 2:
+                    # Routers sometimes answer with one address under many IDs.
+                    # BEP 5's bootstrap query for our own ID gives other contacts.
+                    try:
+                        reply = await self.query(address, b"find_node", {b"target": self.node_id})
+                        referrals += compact_nodes(reply.get(b"nodes", b""))
+                    except (OSError, ValueError, TimeoutError):
+                        pass  # keep the get_peers referrals we already have
+                for node_id, host, node_port in referrals:
+                    admit((host, node_port), node_id)
             except (OSError, ValueError, TimeoutError):
                 return
 
@@ -385,20 +449,38 @@ class DhtNode:
             async with asyncio.timeout(timeout):
                 async with self._lookup_lock:
                     if not candidates:
-                        for address in await self._resolve():
+                        seeds.update(await self._resolve())
+                        for address in seeds:
                             candidates.setdefault(address, None)
-                    while len(queried) < MAX_QUERIES:
-                        available = [a for a in candidates if a not in queried]
-                        available.sort(key=lambda a: xor_distance(candidates[a], info_hash)
-                                       if candidates[a] is not None else -1)
-                        batch = available[:min(ALPHA, MAX_QUERIES - len(queried))]
-                        if not batch:
+                    # Keep ALPHA responsive queries in flight. A dead node holds
+                    # its slot for SLOW_QUERY, not for a whole lockstep round.
+                    while True:
+                        now = loop.time()
+                        fresh = [launched[t] + SLOW_QUERY - now for t in in_flight
+                                 if now - launched[t] < SLOW_QUERY]
+                        while (len(fresh) < ALPHA and len(in_flight) < MAX_IN_FLIGHT
+                               and len(queried) < MAX_QUERIES):
+                            waiting = [a for a in candidates if a not in queried]
+                            if not waiting:
+                                break
+                            address = min(waiting, key=distance)
+                            queried.add(address)
+                            task = asyncio.create_task(probe(address))
+                            in_flight.add(task)
+                            launched[task] = now
+                            fresh.append(SLOW_QUERY)
+                        if not in_flight:
                             break
-                        queried.update(batch)
-                        # TaskGroup drains siblings on cancellation or callback failure.
-                        async with asyncio.TaskGroup() as group:
-                            for address in batch:
-                                group.create_task(probe(address))
+                        done, in_flight = await asyncio.wait(
+                            in_flight, timeout=max(0.001, min(fresh)) if fresh else None,
+                            return_when=asyncio.FIRST_COMPLETED)
+                        for task in done:
+                            del launched[task]
+                            task.result()  # a failing on_peers callback ends the lookup
+                    if not peers:
+                        self.note(f"lookup found no peers: {len(queried)} queries, {replies} replies"
+                                  + (f", closest node shares {shared_prefix_bits(closest, info_hash)} "
+                                     "prefix bits" if closest is not None else ""))
                     if port is not None:
                         targets = sorted(tokens, key=lambda a: xor_distance(tokens[a][0], info_hash))[:K]
                         async def announce(address):
@@ -413,6 +495,13 @@ class DhtNode:
                                 group.create_task(announce(address))
         except TimeoutError:
             self.metrics.dht_failures += 1
+            self.note(f"lookup deadline of {timeout:g}s expired: {len(queried)} queries, "
+                      f"{replies} replies, {len(peers)} peers")
+        finally:
+            # Drain on deadline, cancellation, or callback failure.
+            for task in in_flight:
+                task.cancel()
+            await asyncio.gather(*in_flight, return_exceptions=True)
         return tuple(peers)
 
 
@@ -426,8 +515,13 @@ class DhtDiscovery:
         self.on_peers = on_peers
         self.first_done = asyncio.Event()
         self.changed = asyncio.Event()
-        self.errors = []
+        self.setup_errors = []
         self.task = None
+
+    @property
+    def errors(self):
+        """Setup failures first, then the node's bounded query/lookup sample."""
+        return (self.setup_errors + self.node.errors)[:MAX_ERRORS]
 
     def start(self):
         self.task = asyncio.create_task(self._run())
@@ -440,14 +534,17 @@ class DhtDiscovery:
         try:
             await self.node.start()
             while True:
-                await self.node.discover(self.torrent.info_hash, port=self.port,
-                                         timeout=self.timeout, on_peers=found)
+                peers = await self.node.discover(self.torrent.info_hash, port=self.port,
+                                                 timeout=self.timeout, on_peers=found)
                 self.first_done.set()
                 self.changed.set()
-                await asyncio.sleep(300)
+                # An empty lookup is retried sooner; the table now holds nodes
+                # that replied, so the next lookup starts closer to the hash.
+                await asyncio.sleep(REFRESH_SECONDS if peers else RETRY_SECONDS)
         except (OSError, ValueError) as error:
             self.node.metrics.dht_failures += 1
-            self.errors.append(str(error))
+            if len(self.setup_errors) < MAX_ERRORS:
+                self.setup_errors.append(f"setup: {describe_error(error)}")
         finally:
             self.first_done.set()
             self.changed.set()
