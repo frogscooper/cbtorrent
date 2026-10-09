@@ -223,7 +223,7 @@ shortlist is full, then run
 `python -m unittest discover -s tests -p test_diagnostics.py -k displaces`.
 Explain from the failure why that rule never reaches the node that holds peers.
 
-## Dial ahead so dead addresses cannot stall the start
+## [#21 — Dial ahead so dead addresses cannot stall the start](https://github.com/frogscooper/cbtorrent/pull/21)
 
 **What changed:** Up to 8 connection attempts run ahead of the 4 piece-transfer
 slots. In the Debian smoke test, slots used to spend about six minutes waiting out
