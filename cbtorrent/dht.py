@@ -29,6 +29,10 @@ MAX_HASHES, PEERS_PER_HASH = 128, 50
 MAX_ERRORS, MAX_QUERY_ERRORS = 20, 8
 NODE_TTL, PEER_TTL, TOKEN_PERIOD = 900, 1800, 300
 REFRESH_SECONDS, RETRY_SECONDS = 300, 60
+# Opening the UDP socket is local work, not a network round trip, so it gets
+# its own limit. Reusing query_timeout made a tiny query timeout fail start()
+# on slower event loops such as the Windows Proactor loop.
+BIND_TIMEOUT = 5.0
 DEFAULT_BOOTSTRAP = (("dht.transmissionbt.com", 6881), ("router.bittorrent.com", 6881),
                      ("router.utorrent.com", 6881), ("dht.libtorrent.org", 25401))
 
@@ -202,7 +206,7 @@ class DhtNode:
         if self._closed:
             raise OSError("DHT node is closed")
         if self._transport is None:
-            async with asyncio.timeout(self.query_timeout):
+            async with asyncio.timeout(BIND_TIMEOUT):
                 self._transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
                     lambda: _Protocol(self), local_addr=(self.bind_host, self.bind_port),
                     family=socket.AF_INET)

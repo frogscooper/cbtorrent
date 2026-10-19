@@ -57,7 +57,8 @@ class Peer:
 
     async def read(self, size):
         try:
-            data = await asyncio.wait_for(self.reader.readexactly(size), self.timeout)
+            async with asyncio.timeout(self.timeout):
+                data = await self.reader.readexactly(size)
         except asyncio.IncompleteReadError as error:
             self.metrics.wire_received_bytes += len(error.partial)
             self.received_bytes += len(error.partial)
@@ -74,7 +75,8 @@ class Peer:
         self.writer.write(data)
         self.metrics.wire_sent_bytes += len(data)
         self.sent_bytes += len(data)
-        await asyncio.wait_for(self.writer.drain(), self.timeout)
+        async with asyncio.timeout(self.timeout):
+            await self.writer.drain()
 
     async def handshake(self, peer_id):
         await self.send(PROTOCOL + RESERVED + self.torrent.info_hash + peer_id)
@@ -197,7 +199,8 @@ class Peer:
                 for piece, offset in tuple(self.pending):
                     self.cancel_block(piece, offset)
                 if self.pending:
-                    await asyncio.wait_for(self.writer.drain(), min(self.timeout, 0.25))
+                    async with asyncio.timeout(min(self.timeout, 0.25)):
+                        await self.writer.drain()
             except (OSError, asyncio.TimeoutError):
                 pass
             self.pending.clear()
@@ -205,6 +208,7 @@ class Peer:
     async def close(self):
         self.writer.close()
         try:
-            await asyncio.wait_for(self.writer.wait_closed(), self.timeout)
+            async with asyncio.timeout(self.timeout):
+                await self.writer.wait_closed()
         except (OSError, asyncio.TimeoutError):
             pass

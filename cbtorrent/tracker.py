@@ -149,7 +149,8 @@ async def _http(url, info_hash, peer_id, port, downloaded, uploaded, left, event
             finally:
                 writer.close()
                 try:
-                    await asyncio.wait_for(writer.wait_closed(), min(timeout, 1))
+                    async with asyncio.timeout(min(timeout, 1)):
+                        await writer.wait_closed()
                 except (OSError, asyncio.TimeoutError):
                     pass
 
