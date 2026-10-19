@@ -462,7 +462,8 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 if waits:
                     if discovery is not None:
                         try:
-                            await asyncio.wait_for(discovery.changed.wait(), wait_timeout)
+                            async with asyncio.timeout(wait_timeout):
+                                await discovery.changed.wait()
                             discovery.changed.clear()
                         except asyncio.TimeoutError:
                             pass
