@@ -314,7 +314,8 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 step[0] = "piece"
                 data = await peer.download_piece(index, pipeline, on_block=on_block,
                                                   buffer=work, on_data=on_data,
-                                                  endgame=duplicate is not None)
+                                                  endgame=duplicate is not None,
+                                                  stall_delay=endgame_delay)
                 transfer_seconds = perf_counter() - transfer_started
                 if work.invalid or index not in remaining:
                     return

@@ -41,7 +41,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
 
     async def seed(self, *, fail_first=None, always_fail=None, hold_last=False,
                    corrupt_prefix=False, wait_helper=False, no_piece=False,
-                   hold_all=False, duplicate_reply=False):
+                   hold_all=False, duplicate_reply=False, pause_after_first=0):
         attempts = 0
         async def handle(reader, writer):
             nonlocal attempts
@@ -97,6 +97,8 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                     if duplicate_reply:
                         writer.write(response)
                     await writer.drain()
+                    if pause_after_first and offset == 0:
+                        await asyncio.sleep(pause_after_first)
             except (asyncio.IncompleteReadError, ConnectionError):
                 pass
             finally:
@@ -175,6 +177,29 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0.01)
         self.assertIn((0, 65536, len(self.data) - 65536), self.cancels)
         self.assertLessEqual(self.max_live, 2)
+
+    async def test_short_owner_pause_costs_only_the_tail_block(self):
+        """A pause longer than endgame_delay must not make the helper refetch the piece."""
+        slow = await self.seed(hold_last=True, pause_after_first=0.045)
+        fast = await self.seed()
+        report = await self.get([slow, fast], timeout=1)
+        self.assertEqual((self.root / "out").read_bytes(), self.data)
+        fast_requests = [r for r in self.requests if r[0] == fast[1]]
+        self.assertEqual([r[3] for r in fast_requests], [65536])
+        self.assertEqual(report["endgame_requested_bytes"], len(self.data) - 65536)
+        self.assertEqual(report["endgame_transfers"], 1)
+
+    async def test_silent_owner_after_probe_lets_helper_race_every_missing_block(self):
+        """If the piece stays stuck after the tail probe, the helper fetches the rest."""
+        slow = await self.seed(hold_last=True, pause_after_first=3)
+        fast = await self.seed()
+        report = await self.get([slow, fast], timeout=1)
+        self.assertEqual((self.root / "out").read_bytes(), self.data)
+        fast_requests = [r for r in self.requests if r[0] == fast[1]]
+        self.assertEqual([r[3] for r in fast_requests], [65536, 49152, 32768, 16384])
+        self.assertEqual(report["endgame_requested_bytes"], len(self.data) - 16384)
+        self.assertEqual(report["endgame_transfers"], 1)
+        self.assertEqual(report["endgame_verified_bytes"], len(self.data))
 
     async def test_endgame_never_exceeds_helper_byte_budget(self):
         slow = await self.seed(hold_all=True)

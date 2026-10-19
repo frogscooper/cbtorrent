@@ -1,6 +1,7 @@
 """BEP 3 TCP messages with bounded reads and byte accounting."""
 import asyncio
 import struct
+from time import perf_counter
 
 from .metrics import Metrics
 from .extensions import MAX_EXTENDED, RESERVED, MetadataServer, handshake as extension_handshake
@@ -20,6 +21,7 @@ class PieceBuffer:
                             for offset in range(0, size, BLOCK_SIZE))
         self.received = set()
         self.received_bytes = 0
+        self.last_progress = perf_counter()  # when any owner last added a block
         self.owners = set()
         self.raced = False
         self.invalid = False
@@ -34,6 +36,7 @@ class PieceBuffer:
         self.data[offset:offset + len(block)] = block
         self.received.add(offset)
         self.received_bytes += len(block)
+        self.last_progress = perf_counter()
         return True
 
 
@@ -159,16 +162,37 @@ class Peer:
         self.metrics.cancel_requests += 1
 
     async def download_piece(self, index, pipeline, on_block=None, *, buffer=None,
-                             on_data=None, endgame=False):
+                             on_data=None, endgame=False, stall_delay=None):
+        """Fetch the missing blocks of one piece into buffer.
+
+        An endgame helper (endgame=True with a stall_delay) first probes with
+        only the tail block, which an in-order owner would deliver last. It
+        races the remaining blocks only if the whole piece then makes no
+        progress for stall_delay. A short pause from a live owner therefore
+        costs one duplicate block instead of the entire piece.
+        """
         buffer = buffer or PieceBuffer(self.torrent.piece_size(index))
+        blocks = buffer.blocks[::-1] if endgame else buffer.blocks
+        probing = endgame and stall_delay is not None
+        probe_sent = False
         cursor = 0
         try:
             while buffer.missing_bytes:
-                while not self.choked and cursor < len(buffer.blocks) and len(self.pending) < pipeline:
-                    offset, length = buffer.blocks[cursor]
+                if probing and probe_sent and not self.pending:
+                    wait = stall_delay - (perf_counter() - buffer.last_progress)
+                    if wait > 0:
+                        await asyncio.sleep(wait)
+                        continue
+                    probing = False
+                limit = 0 if probing and probe_sent else (1 if probing else pipeline)
+                while not self.choked and cursor < len(blocks) and len(self.pending) < limit:
+                    offset, length = blocks[cursor]
                     cursor += 1
+                    # Check again just before asking: another owner may have
+                    # delivered this block while we waited.
                     if offset in buffer.received:
                         continue
+                    probe_sent = True
                     self.pending[index, offset] = length
                     if endgame:
                         self.metrics.endgame_requested_bytes += length
