@@ -378,6 +378,30 @@ python -m cbtorrent benchmark --trials 5 --size-mib 1 --seed 2026 --report bench
 These fixtures are regression and research tools. They do not model real congestion, NAT,
 public churn, or disk contention. Do not treat a localhost win as a public-swarm claim.
 
+### Connection dial-ahead
+
+Public swarms list many addresses that never answer. Connection setup therefore
+runs ahead of transfers instead of inside the `--concurrency` piece slots: up to 8
+half-open attempts (TCP connect or handshake) at once, in candidate order. A
+connected peer waiting for its first unchoke no longer counts as half-open, so it
+does not block new attempts; all connections stay within `--max-connections`.
+Whenever connected, unchoked peers with wanted pieces exist, the policy chooses
+among only those. Otherwise slots wait for pending attempts, falling back to
+connecting inside a transfer only when no attempt is pending.
+
+A failed attempt is recorded like a failed first transfer: a failure observation,
+retry backoff, and an entry in `peer_errors`. A successful attempt adds no
+observation, so policies still treat the peer as unexplored. The policy did not
+choose these attempts, so `attempt_finished` is not called for them.
+
+Measurement change: for a peer connected ahead of time, its first observation's
+`seconds` and `wire_bytes` exclude connection setup (TCP connect, handshake,
+bitfield, unchoke wait). Those bytes still count in report-level `wire_*` and
+`protocol_overhead_bytes`, and `connections` still counts every attempt. Local
+policy benchmarks connect instantly, so dial-ahead saves nothing there. Paired runs
+(`benchmarks/dial-ahead-*.json`, 3 trials each) kept every success, byte count, and
+connection count, with the `uniform` scenario up to 2% (about 25 ms) slower.
+
 ### Peer recovery and endgame
 
 Recovery and endgame apply to all policies and GUI/magnet downloads. Headless
@@ -483,8 +507,9 @@ outside cbtorrent's transfer counters. Remote API byte statistics can lag comple
 - JSON metrics and per-peer observations
 - Desktop GUI as the default launch path with multi-torrent queue and session persistence; headless subcommands for scripts and CI
 
-Defaults for downloads: 4 concurrent pieces, up to 16 outbound connections, 8 pipelined
-requests per peer, 15 s I/O timeout, 120 s piece deadline. Up to 200 peer candidates and
+Defaults for downloads: 4 concurrent pieces, up to 16 outbound connections (8 half-open
+attempts ahead of transfers), 8 pipelined requests per peer, 15 s I/O timeout, 120 s
+piece deadline. Up to 200 peer candidates and
 the first 8 unique tracker URLs. Incoming clients use a separate cap equal to
 `--max-connections`. Run `python -m cbtorrent download --help` for the full flag list.
 

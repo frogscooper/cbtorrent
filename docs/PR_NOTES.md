@@ -222,3 +222,25 @@ strict because the info hash depends on exact bytes.
 shortlist is full, then run
 `python -m unittest discover -s tests -p test_diagnostics.py -k displaces`.
 Explain from the failure why that rule never reaches the node that holds peers.
+
+## [#21 — Dial ahead so dead addresses cannot stall the start](https://github.com/frogscooper/cbtorrent/pull/21)
+
+**What changed:** Up to 8 connection attempts run ahead of the 4 piece-transfer
+slots. In the Debian smoke test, slots used to spend about six minutes waiting out
+15-second connect timeouts on unreachable addresses before reaching a fast peer.
+
+**How it works:** `open_peer()` connects, handshakes, and waits for an unchoke for
+both a transfer and the new `dial()` task. The scheduler starts dials, then offers
+the policy only peers that are connected, unchoked, and have wanted pieces. After
+the handshake a dial stops counting as half-open, so a peer that keeps us choked
+cannot block new attempts.
+
+**Tradeoff:** The policy no longer sees connection time in a peer's first
+observation. That was setup cost, not service speed, but it is a measurement
+change, so README says so.
+
+**Read first:** `dial()` and the top of the scheduler loop in `cbtorrent/client.py`,
+then `tests/test_dial.py`.
+
+**Try yourself:** Set `DIAL_AHEAD = 1` and run `tests/test_dial.py`. Predict which
+test fails and why the choking-peer test still passes, then check.
