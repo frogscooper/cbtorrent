@@ -217,7 +217,8 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
             metrics.peer_retries += 1
         retry_at.pop(address, None)
         metrics.connections += 1
-        reader, writer = await asyncio.wait_for(asyncio.open_connection(*address), timeout)
+        async with asyncio.timeout(timeout):
+            reader, writer = await asyncio.open_connection(*address)
         peer = Peer(reader, writer, torrent, metrics, timeout, pex=make_pex(writer))
         sessions[address] = peer
         step[0] = "handshake"
