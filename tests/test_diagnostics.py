@@ -192,6 +192,21 @@ class DhtErrorTests(AsyncFixtures):
         node.note("summary")
         self.assertEqual(node.errors[-1], "summary")
 
+    async def test_start_does_not_reuse_query_timeout_for_bind(self):
+        """A socket bind slower than one query timeout must not fail start()."""
+        loop = asyncio.get_running_loop()
+        real_bind = loop.create_datagram_endpoint
+
+        async def slow_bind(*args, **kwargs):
+            await asyncio.sleep(0.05)
+            return await real_bind(*args, **kwargs)
+
+        node = DhtNode(bootstrap=(), bind_host="127.0.0.1", query_timeout=0.01)
+        self.addAsyncCleanup(node.close)
+        with patch.object(loop, "create_datagram_endpoint", side_effect=slow_bind):
+            port = await node.start()
+        self.assertGreater(port, 0)
+
 
 class LookupConvergenceTests(AsyncFixtures):
     async def test_closer_referral_displaces_farthest_unqueried_candidate(self):
