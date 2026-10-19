@@ -12,6 +12,7 @@ from urllib.parse import parse_qsl, urlsplit
 from .bencode import encode
 from .client import DownloadError, download
 from .dht import DEFAULT_BOOTSTRAP, DhtNode
+from .diagnostics import describe_error, install_reset_filter
 from .extensions import (BLOCK, MAX_EXTENDED, METADATA_ID, RESERVED, extended,
                          handshake, metadata_message, negotiation)
 from .metainfo import Torrent
@@ -216,7 +217,7 @@ async def resolve(magnet, peers=(), *, timeout=60.0, peer_timeout=10.0,
                 task.exception()  # Retrieve any worker error; cancellation wins.
             raise
         except (OSError, ValueError) as error:
-            cache_errors.append((str(error) or type(error).__name__)[:256])
+            cache_errors.append(describe_error(error)[:256])
             return None
 
     if metadata_cache is not None:
@@ -233,6 +234,7 @@ async def resolve(magnet, peers=(), *, timeout=60.0, peer_timeout=10.0,
             return replace(cached, trackers=magnet.trackers), addresses, report
     queue, seen, errors, tasks = asyncio.Queue(maxsize=200), {}, [], []
     loop = asyncio.get_running_loop()
+    install_reset_filter(loop)
     found = loop.create_future()
     node, listener = None, None
     announced = set()
@@ -249,7 +251,7 @@ async def resolve(magnet, peers=(), *, timeout=60.0, peer_timeout=10.0,
 
     def error_note(error):
         if len(errors) < 20:
-            errors.append(str(error) or type(error).__name__)
+            errors.append(error if isinstance(error, str) else describe_error(error))
 
     async def worker():
         while True:
@@ -334,6 +336,7 @@ async def resolve(magnet, peers=(), *, timeout=60.0, peer_timeout=10.0,
     report = metrics.report(complete=torrent is not None)
     report.update(cache_hit=False, cache_errors=cache_errors)
     report["errors"] = errors
+    report["dht_errors"] = list(node.errors) if node is not None else []
     report["metadata_size"] = len(torrent.info_bytes) if torrent is not None else 0
     if torrent is None:
         raise DownloadError("could not resolve magnet metadata" + (": " + errors[-1] if errors else "; no peers found"),

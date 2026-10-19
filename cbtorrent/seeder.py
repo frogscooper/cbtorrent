@@ -8,6 +8,7 @@ from collections import deque
 from hashlib import sha1
 from pathlib import Path
 
+from .diagnostics import describe_error
 from .metrics import Metrics
 from .filepaths import open_payload, reject_symlinks
 from .wire import BLOCK_SIZE, PROTOCOL, Peer, message
@@ -193,7 +194,7 @@ class SeedServer:
                 await asyncio.gather(uploader, receiver, return_exceptions=True)
         except (OSError, ValueError, asyncio.TimeoutError, asyncio.IncompleteReadError) as error:
             if len(self.errors) < 20:
-                self.errors.append(str(error))
+                self.errors.append(describe_error(error))
         finally:
             self.peers.discard(peer)
             await peer.close()

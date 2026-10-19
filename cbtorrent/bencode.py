@@ -13,8 +13,12 @@ def encode(value):
     raise TypeError("bencoding requires integers, bytes, lists, or byte-key dictionaries")
 
 
-def decode_prefix(data: bytes, *, max_size: int = 16 * 1024 * 1024):
-    """Decode one value and return its end offset (BEP 9 appends raw bytes)."""
+def decode_prefix(data: bytes, *, max_size: int = 16 * 1024 * 1024, sorted_keys: bool = True):
+    """Decode one value and return its end offset (BEP 9 appends raw bytes).
+
+    `sorted_keys=False` accepts any key order (never duplicates) for messages
+    that are not hashed, such as KRPC replies from lax DHT implementations.
+    """
     if len(data) > max_size:
         raise ValueError("bencoded input exceeds size limit")
     position = 0
@@ -43,7 +47,9 @@ def decode_prefix(data: bytes, *, max_size: int = 16 * 1024 * 1024):
                 if token == b"l":
                     result.append(item)
                 else:
-                    if not isinstance(item, bytes) or (previous is not None and item <= previous):
+                    if not isinstance(item, bytes) or (
+                            item in result if not sorted_keys
+                            else previous is not None and item <= previous):
                         raise ValueError("dictionary keys must be unique, sorted bytes")
                     previous = item
                     result[item] = parse(depth + 1)
@@ -68,8 +74,8 @@ def decode_prefix(data: bytes, *, max_size: int = 16 * 1024 * 1024):
     return value, position
 
 
-def decode(data: bytes, *, max_size: int = 16 * 1024 * 1024):
-    value, position = decode_prefix(data, max_size=max_size)
+def decode(data: bytes, *, max_size: int = 16 * 1024 * 1024, sorted_keys: bool = True):
+    value, position = decode_prefix(data, max_size=max_size, sorted_keys=sorted_keys)
     if position != len(data):
         raise ValueError("trailing bencoded data")
     return value

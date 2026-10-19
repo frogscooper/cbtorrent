@@ -57,7 +57,8 @@ class Peer:
 
     async def read(self, size):
         try:
-            data = await asyncio.wait_for(self.reader.readexactly(size), self.timeout)
+            async with asyncio.timeout(self.timeout):
+                data = await self.reader.readexactly(size)
         except asyncio.IncompleteReadError as error:
             self.metrics.wire_received_bytes += len(error.partial)
             self.received_bytes += len(error.partial)
@@ -67,10 +68,15 @@ class Peer:
         return data
 
     async def send(self, data):
+        # Writing to a dropped connection only makes asyncio log
+        # "socket.send() raised exception." for every further write.
+        if self.writer.is_closing():
+            raise ConnectionResetError("connection already closed")
         self.writer.write(data)
         self.metrics.wire_sent_bytes += len(data)
         self.sent_bytes += len(data)
-        await asyncio.wait_for(self.writer.drain(), self.timeout)
+        async with asyncio.timeout(self.timeout):
+            await self.writer.drain()
 
     async def handshake(self, peer_id):
         await self.send(PROTOCOL + RESERVED + self.torrent.info_hash + peer_id)
@@ -144,8 +150,8 @@ class Peer:
 
     def cancel_block(self, index, offset):
         length = self.pending.get((index, offset))
-        if length is None:
-            return
+        if length is None or self.writer.is_closing():
+            return  # nothing to cancel on a dropped connection
         data = message(8, struct.pack("!III", index, offset, length))
         self.writer.write(data)
         self.metrics.wire_sent_bytes += len(data)
@@ -193,7 +199,8 @@ class Peer:
                 for piece, offset in tuple(self.pending):
                     self.cancel_block(piece, offset)
                 if self.pending:
-                    await asyncio.wait_for(self.writer.drain(), min(self.timeout, 0.25))
+                    async with asyncio.timeout(min(self.timeout, 0.25)):
+                        await self.writer.drain()
             except (OSError, asyncio.TimeoutError):
                 pass
             self.pending.clear()
@@ -201,6 +208,7 @@ class Peer:
     async def close(self):
         self.writer.close()
         try:
-            await asyncio.wait_for(self.writer.wait_closed(), self.timeout)
+            async with asyncio.timeout(self.timeout):
+                await self.writer.wait_closed()
         except (OSError, asyncio.TimeoutError):
             pass

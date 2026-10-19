@@ -265,14 +265,16 @@ python -m cbtorrent seed example.torrent --file downloads/example.bin --no-track
 Use `--no-dht` on `download`, `seed`, or `gui` to disable it. **`--no-trackers`
 alone does not disable DHT.** `--dht-bootstrap HOST:PORT` is repeatable and replaces
 all default bootstrap endpoints. Otherwise, the torrent's `nodes` contacts are
-used when present, falling back to `dht.transmissionbt.com:6881` and
-`router.utorrent.com:6881`. `create --node HOST:PORT` embeds an explicit bootstrap
+used when present, falling back to `dht.transmissionbt.com:6881`,
+`router.bittorrent.com:6881`, `router.utorrent.com:6881`, and
+`dht.libtorrent.org:25401`, resolved in parallel. `create --node HOST:PORT` embeds an explicit bootstrap
 contact without adding built-in public routers to generated torrents.
 The Python `download()` API preserves its prior DHT behavior: opt in with
 `use_dht=True`; `dht_bootstrap=[]` disables bootstrap DNS entirely. Policy benchmarks
 explicitly disable DHT and PEX, and DHT tests use only local UDP/TCP fixtures.
 
-DHT starts alongside downloads and refreshes every five minutes. A download with
+DHT starts alongside downloads and refreshes every five minutes, or after one
+minute when the previous lookup found no peers. A download with
 no usable peers waits for the initial lookup, bounded by the smaller of `--timeout`
 and 15 seconds, then reports failure if none are usable. Existing transfers do not
 wait for DHT. The node uses an ephemeral UDP port on `--listen-host`; announcements
@@ -281,9 +283,20 @@ An IPv6-only listening address leaves IPv4 DHT unavailable; explicit IPv6 peers 
 trackers still work. There is no automatic NAT mapping.
 
 Replies must match both the transaction and source endpoint. Announces require a
-secret, expiring token bound to the source IP and info hash. Requests and replies
-are capped at 1200 bytes; lookups cap referrals at 64, queries at 32, parallel lookup
-queries at 3, and collected peers at 200. A node has at most 8 pending requests,
+secret, expiring token bound to the source IP and info hash. Sent packets are capped
+at 1200 bytes and received datagrams at 2048, since replies from nodes holding many
+peers can exceed 1200. Received KRPC dictionaries may use any key order (some
+deployed clients do not sort keys); duplicate keys are still rejected, and metainfo
+and other hashed data keep strict canonical decoding.
+
+Lookups keep at most 64 unqueried referrals. A full shortlist exchanges its
+farthest entry for a closer referral, so the lookup keeps converging toward the
+info hash. Three responsive queries run in parallel; a query unanswered after one
+second stops holding its slot (its late reply still counts), with at most 8
+overlapping. A lookup sends at most 32 `get_peers` queries and collects 200 peers.
+A bootstrap router whose reply names fewer than 4 distinct contacts (seen live: one
+address under eight node IDs) is asked once more with BEP 5's `find_node` for our
+own ID. A node has at most 8 pending requests,
 256 routing contacts, and 128 stored info hashes with 50 peers each. Incoming query
 replies are limited to 50 per second with a burst of 100. Routing contacts expire
 after 15 minutes and announced peers after 30 minutes. Cancellation drains pending
@@ -299,7 +312,11 @@ unmatched/malformed received datagrams; IP/UDP headers and DNS traffic are exclu
 `dht_requests` counts sent queries, `dht_failures` counts failed queries, DNS/bind
 failures and whole-lookup deadline expirations (these can overlap), and `dht_peers`
 counts unique peers per lookup, including peers already seen in previous lookups.
-`dht_errors` contains setup errors. Existing `wire_*` and `protocol_overhead_bytes`
+`dht_errors` holds at most 20 entries: setup failures, then up to 8 sample query
+failures (`get_peers 203.0.113.5:6881: no reply within 2s`), bootstrap DNS failures,
+and a summary of any lookup that found no peers or hit its deadline, with query and
+reply counts and how many leading bits the closest replying node shares with the
+info hash. Magnet metadata reports include the same `dht_errors` list. Existing `wire_*` and `protocol_overhead_bytes`
 retain their peer-TCP-only meanings; DHT overhead is separate. Completion time
 includes any initial wait for discovery.
 
@@ -391,6 +408,21 @@ blocks already present in a raced assembly), `endgame_verified_bytes` (committed
 raced assemblies), and `cancel_requests` (sent cancel messages). Existing wire,
 payload, waste, and completion definitions remain unchanged. Bytes still in a
 remote queue or unread socket buffer are outside application-level counters.
+
+Each `peer_errors` entry (the first 30 failures) names the phase that failed:
+`connect`, `handshake`, `unchoke` (connected but not yet unchoked with a bitfield),
+`wait` (no wanted piece yet), `piece N`, `verify` (hash check), or `have`. Timeouts
+state their limit: `--timeout` for one connect/read/write, or `--piece-timeout` for
+the whole attempt. Messages are never empty. `peer_failure_phases` counts every
+failure by phase, so `connect` separates unreachable addresses from slow or
+choking peers even after the sample list is full.
+
+On Windows, a peer that resets a socket we are already closing (WinError 10054)
+used to print an asyncio traceback. Downloads and `seed` now filter just that
+teardown callback on their event loop. The failure itself is still recorded, and
+all other loop errors are still reported. Peers also stop writing to a connection
+once it is closing, so asyncio no longer logs `socket.send() raised exception.`
+after a drop, and `cancel_requests` counts only cancels actually written.
 
 Run the paired engine ablation with accelerated local fixtures:
 
