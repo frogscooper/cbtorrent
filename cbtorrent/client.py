@@ -29,13 +29,6 @@ class MixedPieceError(ValueError):
     """A mixed-source hash failure cannot identify the corrupt contributor."""
 
 
-# Half-open connection attempts (TCP connect or handshake) opened ahead of
-# transfer slots. Unreachable addresses then cost a dial slot for one timeout
-# instead of idling a piece transfer. Connected peers that have not unchoked us
-# yet wait outside this limit, bounded by max_connections.
-DIAL_AHEAD = 8
-
-
 async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=120.0,
                    pipeline=8, policy=None, concurrency=4, max_connections=16,
                    resume=False, use_trackers=True, listen_host="127.0.0.1",
@@ -72,7 +65,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
     metrics = Metrics()
     metrics.start()
     policy = policy or ThroughputPolicy()
-    observations, sessions, tasks, dialing = {}, {}, {}, {}  # dialing: task -> (address, step)
+    observations, sessions, tasks = {}, {}, {}
     active = {}
     retired, claimed = set(), set()
     retry_at, failures = {}, {}
@@ -198,62 +191,6 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         if peer is not None:
             await peer.close()
 
-    def failure_detail(error, phase, deadline, index=None):
-        detail = None
-        if isinstance(error, TimeoutError):
-            limit = piece_timeout if deadline is not None and deadline.expired() else timeout
-            detail = f"timed out after {limit:g}s"
-        if phase in ("piece", "verify") and index is not None:
-            detail = f"piece {index}: {detail or describe_error(error)}"
-        return detail
-
-    async def open_peer(address, step):
-        """Connect, handshake, and wait for an unchoke; step[0] names the stage.
-
-        The session is registered before the handshake, so callers find it in
-        `sessions` to count its bytes or close it if a later stage fails.
-        """
-        if address in retry_at:
-            metrics.peer_retries += 1
-        retry_at.pop(address, None)
-        metrics.connections += 1
-        async with asyncio.timeout(timeout):
-            reader, writer = await asyncio.open_connection(*address)
-        peer = Peer(reader, writer, torrent, metrics, timeout, pex=make_pex(writer))
-        sessions[address] = peer
-        step[0] = "handshake"
-        await peer.handshake(peer_id)
-        step[0] = "unchoke"
-        schedule_changed.set()  # no longer half-open: the scheduler may dial another
-        await peer.ready()
-        peer.handshaken = True
-        return peer
-
-    async def dial(address, step):
-        """Open a session ahead of a transfer slot; the policy chooses later.
-
-        A failure is recorded exactly like a failed first transfer. Success adds
-        no observation, so policies still treat the ready peer as unexplored.
-        """
-        started = perf_counter()
-        deadline = None
-        try:
-            async with asyncio.timeout(piece_timeout) as deadline:
-                await open_peer(address, step)
-        except (OSError, ValueError, asyncio.TimeoutError, asyncio.IncompleteReadError) as error:
-            peer = sessions.get(address)
-            wire_bytes = peer.sent_bytes + peer.received_bytes if peer else 0
-            observations.setdefault(address, Observation()).record(
-                0, perf_counter() - started, wire_bytes, True)
-            await retire(address, error, step[0], failure_detail(error, step[0], deadline))
-        except asyncio.CancelledError:
-            peer = sessions.pop(address, None)
-            if peer is not None:
-                await peer.close()
-            raise
-        finally:
-            schedule_changed.set()
-
     async def transfer(address, duplicate=None):
         observation = observations.setdefault(address, Observation())
         started = perf_counter()
@@ -267,12 +204,23 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         completed = False
         interrupted = False
         # The failure phase separates dead addresses from slow or choking peers.
-        step, deadline = ["connect"], None
+        phase, deadline = "connect", None
         try:
             async with asyncio.timeout(piece_timeout) as deadline:
                 if peer is None:
-                    peer = await open_peer(address, step)
-                step[0] = "wait"
+                    if address in retry_at:
+                        metrics.peer_retries += 1
+                    retry_at.pop(address, None)
+                    metrics.connections += 1
+                    reader, writer = await asyncio.wait_for(asyncio.open_connection(*address), timeout)
+                    peer = Peer(reader, writer, torrent, metrics, timeout, pex=make_pex(writer))
+                    sessions[address] = peer
+                    phase = "handshake"
+                    await peer.handshake(peer_id)
+                    phase = "unchoke"
+                    await peer.ready()
+                    peer.handshaken = True
+                phase = "wait"
                 if duplicate is not None:
                     if (duplicate not in remaining or duplicate not in peer.available
                             or duplicate not in pieces or pieces[duplicate].invalid):
@@ -311,15 +259,14 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                             other = sessions.get(owner)
                             if owner != address and other is not None:
                                 other.cancel_block(index, offset)
-                step[0] = "piece"
+                phase = "piece"
                 data = await peer.download_piece(index, pipeline, on_block=on_block,
                                                   buffer=work, on_data=on_data,
-                                                  endgame=duplicate is not None,
-                                                  stall_delay=endgame_delay)
+                                                  endgame=duplicate is not None)
                 transfer_seconds = perf_counter() - transfer_started
                 if work.invalid or index not in remaining:
                     return
-                step[0] = "verify"
+                phase = "verify"
                 if sha1(data).digest() != torrent.hashes[index]:
                     metrics.hash_failures += 1
                     work.invalid = True
@@ -344,7 +291,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 for other_task, owner in tuple(tasks.items()):
                     if owner in work.owners and other_task is not asyncio.current_task():
                         other_task.cancel()
-                step[0] = "have"
+                phase = "have"
                 await server.have(index)
                 await peer.send(message(4, index.to_bytes(4, "big")))
                 if progress is not None:
@@ -352,11 +299,15 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 emit()
         except (OSError, ValueError, asyncio.TimeoutError, asyncio.IncompleteReadError) as error:
             failed = True
-            peer = peer or sessions.get(address)  # a failed open_peer registered it
-            await retire(address, error, step[0], failure_detail(error, step[0], deadline, index))
+            detail = None
+            if isinstance(error, TimeoutError):
+                limit = piece_timeout if deadline is not None and deadline.expired() else timeout
+                detail = f"timed out after {limit:g}s"
+            if phase in ("piece", "verify") and index is not None:
+                detail = f"piece {index}: {detail or describe_error(error)}"
+            await retire(address, error, phase, detail)
         except asyncio.CancelledError:
             interrupted = True
-            peer = peer or sessions.get(address)
             raise
         finally:
             if work is not None:
@@ -417,11 +368,9 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
             return [p for p in peers if p not in retired and p not in busy
                     and retry_at.get(p, 0) <= now]
 
-        def open_connections(busy):
-            return len(sessions) + sum(p not in sessions for p in busy)
-
         async def make_room(address, busy):
-            if address not in sessions and open_connections(busy) >= max_connections:
+            connecting = sum(p not in sessions for p in busy)
+            if address not in sessions and len(sessions) + connecting >= max_connections:
                 victim = next((p for p in sessions if p not in busy), None)
                 if victim is None:
                     return False
@@ -430,29 +379,11 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
 
         while remaining:
             emit()
-            busy = set(tasks.values()) | {address for address, _ in dialing.values()}
+            busy = set(tasks.values())
             deferred = False
-            if remaining - claimed:
-                half_open = sum(step[0] != "unchoke" for _, step in dialing.values())
-                for address in candidates_for(busy):
-                    if half_open >= DIAL_AHEAD or open_connections(busy) >= max_connections:
-                        break
-                    if address not in sessions:
-                        step = ["connect"]
-                        dialing[asyncio.create_task(dial(address, step))] = (address, step)
-                        busy.add(address)
-                        half_open += 1
             while len(tasks) < concurrency and remaining - claimed:
                 candidates = candidates_for(busy)
                 if not candidates:
-                    break
-                # Offer the policy connected, unchoked peers with wanted pieces.
-                # While dials are pending, a slot never waits on a dead address.
-                ready = [p for p in candidates if p in sessions and sessions[p].handshaken
-                         and sessions[p].available & (remaining - claimed)]
-                if ready:
-                    candidates = ready
-                elif dialing:
                     break
                 useful_candidates = [p for p in candidates if p not in sessions
                                      or sessions[p].available & (remaining - claimed)]
@@ -527,7 +458,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
             if deferred:
                 waits.append(0.05)
             wait_timeout = max(0.001, min(waits)) if waits else None
-            if not tasks and not dialing:
+            if not tasks:
                 if waits:
                     if discovery is not None:
                         try:
@@ -550,7 +481,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
             wake = asyncio.create_task(discovery.changed.wait()) if discovery else None
             progress_wake = asyncio.create_task(schedule_changed.wait())
             try:
-                waiting = set(tasks) | set(dialing)
+                waiting = set(tasks)
                 if wake is not None:
                     waiting.add(wake)
                 if progress_wake is not None:
@@ -569,15 +500,13 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                     waiter.cancel()
                 await asyncio.gather(*waiters, return_exceptions=True)
             for task in done:
-                if dialing.pop(task, None) is None:
-                    del tasks[task]
+                del tasks[task]
                 if not task.cancelled():  # Verified winners cancel their sibling requests.
                     task.result()
-        for task in (*tasks, *dialing):
+        for task in tasks:
             task.cancel()
-        await asyncio.gather(*tasks, *dialing, return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
         tasks.clear()
-        dialing.clear()
         if discovery is not None:
             await discovery.close()
         await server.close()
@@ -602,9 +531,9 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         if pex_task is not None:
             pex_task.cancel()
             await asyncio.gather(pex_task, return_exceptions=True)
-        for task in (*tasks, *dialing):
+        for task in tasks:
             task.cancel()
-        await asyncio.gather(*tasks, *dialing, return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
         if server is not None:
             await server.close()
         await asyncio.gather(*(peer.close() for peer in sessions.values()))
