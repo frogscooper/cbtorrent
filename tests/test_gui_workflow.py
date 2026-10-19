@@ -1,5 +1,6 @@
 """Real Tk button actions with local sources, isolated sessions, and no public peers."""
 import asyncio
+import gc
 import json
 import os
 import tempfile
@@ -36,6 +37,14 @@ class GuiWorkflowTests(unittest.TestCase):
                 window.close()
             window.controller.join(5)
             self.assertFalse(window.controller.busy, "GUI worker leaked after shutdown")
+        # Tk objects must be freed on the thread that created them. A closed
+        # window still sits in reference cycles (its callbacks are closures),
+        # so collect it here on the main thread. Otherwise a later garbage
+        # collection can run on a seed or download worker thread, and Tcl
+        # aborts the process with "Tcl_AsyncDelete: async handler deleted by
+        # the wrong thread".
+        self.windows.clear()
+        gc.collect()
 
     def window(self, **options):
         try:
