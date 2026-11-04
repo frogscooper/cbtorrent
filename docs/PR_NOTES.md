@@ -265,3 +265,23 @@ the numbers are not directly comparable.
 
 **Try yourself:** After the tag exists, run `git diff v0.3.0 v0.3.1 --stat`. Find
 the files from #20 and #21 and match each one to a changelog line.
+
+## [#23 — Live swarm comparison](https://github.com/frogscooper/cbtorrent/pull/23)
+
+**What changed:** `benchmarks/run_live.py` compares policies on real public swarms,
+and `benchmarks/LIVE_EXPERIMENT.md` records the first run: Debian and Arch, heuristic
+against adaptive, 3 rounds, all 12 downloads completed. Adaptive showed no gain.
+
+**How it works:** Each trial runs `cbtorrent download` as its own process with a
+deadline and a temporary folder. In each round the policies take turns in a seeded
+random order, and `paired_vs_baseline` compares them only within the same round.
+
+**Tradeoff:** A swarm changes between trials, so pairing reduces noise but cannot
+remove it. Timeouts and crashes are kept as rows, not dropped, so a policy cannot
+look fast by failing.
+
+**Read first:** `plan()` and `run_trial()` in `benchmarks/run_live.py`, then
+`tests/test_live_harness.py`.
+
+**Try yourself:** In `benchmarks/live-swarm-20261103.json`, find `uploaded_bytes`
+in any trial. Explain why it is 0 using the "Limits" section of the README.

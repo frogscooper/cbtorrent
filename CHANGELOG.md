@@ -6,7 +6,13 @@ is pre-1.0 and experimental: minor versions may change CLI flags and report form
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+- `benchmarks/run_live.py`: paired, interleaved policy comparison on public swarms,
+  one process per trial with a hard deadline, keeping every failed attempt. First
+  results in `benchmarks/LIVE_EXPERIMENT.md`: 12/12 Debian and Arch downloads
+  completed; `adaptive` showed no gain over `heuristic` (median paired ratio 1.14
+  over 6 pairs), and no peer uploaded from us in any trial (#23).
 
 ## 0.3.1
 
