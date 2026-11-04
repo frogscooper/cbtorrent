@@ -245,7 +245,7 @@ then `tests/test_dial.py`.
 **Try yourself:** Set `DIAL_AHEAD = 1` and run `tests/test_dial.py`. Predict which
 test fails and why the choking-peer test still passes, then check.
 
-## 0.3.1 release
+## [#22 — 0.3.1 release](https://github.com/frogscooper/cbtorrent/pull/22)
 
 **What changed:** The version moves from 0.3.0 to 0.3.1, and the changelog's
 "Unreleased" section becomes the 0.3.1 section. It holds the two fixes from the
