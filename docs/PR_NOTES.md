@@ -266,7 +266,7 @@ the numbers are not directly comparable.
 **Try yourself:** After the tag exists, run `git diff v0.3.0 v0.3.1 --stat`. Find
 the files from #20 and #21 and match each one to a changelog line.
 
-## Live swarm comparison
+## [#23 — Live swarm comparison](https://github.com/frogscooper/cbtorrent/pull/23)
 
 **What changed:** `benchmarks/run_live.py` compares policies on real public swarms,
 and `benchmarks/LIVE_EXPERIMENT.md` records the first run: Debian and Arch, heuristic
