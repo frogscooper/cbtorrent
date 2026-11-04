@@ -244,3 +244,24 @@ then `tests/test_dial.py`.
 
 **Try yourself:** Set `DIAL_AHEAD = 1` and run `tests/test_dial.py`. Predict which
 test fails and why the choking-peer test still passes, then check.
+
+## 0.3.1 release
+
+**What changed:** The version moves from 0.3.0 to 0.3.1, and the changelog's
+"Unreleased" section becomes the 0.3.1 section. It holds the two fixes from the
+first live smoke test: clear failure reports (#20) and dial-ahead (#21). No code
+changes in this PR.
+
+**How it works:** `pyproject.toml` stays the only place the version lives. The
+changelog keeps an empty "Unreleased" heading so the next PR has somewhere to add
+its line.
+
+**Tradeoff:** This is a patch release, even though #21 changes a measurement
+definition: a peer's first observation no longer counts connection setup. The
+changelog says so at the top of 0.3.1, so anyone comparing older reports knows
+the numbers are not directly comparable.
+
+**Read first:** the 0.3.1 section of `CHANGELOG.md`.
+
+**Try yourself:** After the tag exists, run `git diff v0.3.0 v0.3.1 --stat`. Find
+the files from #20 and #21 and match each one to a changelog line.
