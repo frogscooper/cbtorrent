@@ -155,7 +155,7 @@ class LoopbackEndToEndTest(unittest.TestCase):
                         run_live.main(["--torrent", str(torrent), "--policies", "heuristic,adaptive",
                                        "--rounds", "1", "--deadline", "60", "--report", str(report),
                                        "--", "--peer", f"127.0.0.1:{port}", "--no-trackers",
-                                       "--no-dht", "--no-pex", "--port", "0"])
+                                       "--no-dht", "--no-pex", "--no-port-mapping", "--port", "0"])
                     finally:
                         sys.stdout = stdout
                 result = json.loads(report.read_text(encoding="utf-8"))

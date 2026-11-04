@@ -410,7 +410,8 @@ class TransferTests(Fixture, unittest.IsolatedAsyncioTestCase):
             line = await asyncio.wait_for(process.stdout.readline(), 5)
             port = int(line.decode().strip().rsplit(":", 1)[1])
             await command("download", cli_meta, "--output", self.output,
-                          "--peer", f"127.0.0.1:{port}", "--no-trackers", "--no-dht")
+                          "--peer", f"127.0.0.1:{port}", "--no-trackers", "--no-dht",
+                          "--no-port-mapping")
             self.assert_directory(self.output)
         finally:
             if process.returncode is None:

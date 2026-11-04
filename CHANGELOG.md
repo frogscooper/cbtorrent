@@ -13,6 +13,9 @@ is pre-1.0 and experimental: minor versions may change CLI flags and report form
   results in `benchmarks/LIVE_EXPERIMENT.md`: 12/12 Debian and Arch downloads
   completed; `adaptive` showed no gain over `heuristic` (median paired ratio 1.14
   over 6 pairs), and no peer uploaded from us in any trial (#23).
+- Automatic port mapping for the listener (NAT-PMP, then UPnP IGD), on by default
+  for `download`, `seed`, and the GUI; `--no-port-mapping` turns it off. Reports
+  add `port_mapping` and `incoming_peers` (#24).
 
 ## 0.3.1
 
