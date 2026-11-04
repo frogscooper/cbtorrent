@@ -177,6 +177,192 @@ class AdaptivePolicy:
         return peer
 
 
+class LearnedPolicy:
+    """Online-learned transfer control: per-peer rates, request windows, and slot count.
+
+    Three estimates are learned during the download, from its own verified pieces:
+
+    1. Each peer's delivery rate, an EWMA of verified bytes per transfer second.
+    2. That peer's request window: enough blocks in flight to cover `queue_seconds`
+       at its learned rate (bandwidth-delay sizing). A window-limited peer delivers
+       about window/RTT, so the next window grows by queue_seconds/RTT until the
+       peer's real capacity, not the window, limits the rate.
+    3. The number of concurrent transfer slots, by noisy hill climbing on measured
+       aggregate goodput (payload bytes per second, counted per block): try more
+       slots for one epoch, keep them only if goodput rose by `min_gain`,
+       otherwise return to the previous count and wait.
+
+    Unknown peers get one exploration piece while enough work remains; then
+    slots go to the fastest learned peers. Near the end, a piece is not handed to
+    a peer whose learned rate would finish it well after all other remaining work
+    (it is deferred to a faster peer instead). Nothing is pretrained or fitted to
+    benchmark scenarios. `clock` is injectable so tests are deterministic.
+    """
+
+    stream = True  # the client keeps each connection busy across pieces
+
+    def __init__(self, *, start_slots=8, max_slots=14, epoch_seconds=2.0, min_gain=0.05,
+                 queue_seconds=1.5, initial_window=16, max_window=64, rate_weight=0.5,
+                 clock=None):
+        if not 1 <= start_slots <= max_slots <= 64:
+            raise ValueError("require 1 <= start_slots <= max_slots <= 64")
+        if not all(math.isfinite(x) and x > 0 for x in (epoch_seconds, queue_seconds)):
+            raise ValueError("epoch_seconds and queue_seconds must be positive and finite")
+        if not 0 <= min_gain < 1 or not 0 < rate_weight <= 1:
+            raise ValueError("min_gain must be in [0, 1) and rate_weight in (0, 1]")
+        if not 1 <= initial_window <= max_window <= 128:
+            raise ValueError("require 1 <= initial_window <= max_window <= 128")
+        from time import perf_counter
+        self.clock = clock or perf_counter
+        self.max_slots, self.epoch_seconds, self.min_gain = max_slots, epoch_seconds, min_gain
+        self.queue_seconds, self.initial_window, self.max_window = queue_seconds, initial_window, max_window
+        self.rate_weight = rate_weight
+        self.rates = {}       # peer -> EWMA bytes/second over transfer time
+        self.samples = {}
+        self.slots = start_slots
+        self.accepted = start_slots   # last count whose goodput was confirmed
+        self.reference = None         # goodput (bytes/s) measured at `accepted`
+        self.trial = False            # this epoch tests slots > accepted
+        self.cooldown = 0
+        self.epoch_start = None
+        self.epoch_bytes = 0
+        self.total_bytes = 0
+        self.recent_goodput = None    # last epoch's goodput, for the tail rule
+        self.deferrals = 0
+        self.stops = 0
+        self.rotations = 0
+        self.abandons = 0
+        self.history = []             # (slots, goodput) per finished epoch, for reports
+
+    # Learning ----------------------------------------------------------------------
+
+    def observe(self, peer, size, seconds):
+        if size <= 0 or not math.isfinite(seconds) or seconds <= 0:
+            raise ValueError("training requires positive bytes and finite positive time")
+        rate = size / seconds
+        old = self.rates.get(peer)
+        self.rates[peer] = rate if old is None else (1 - self.rate_weight) * old + self.rate_weight * rate
+        self.samples[peer] = self.samples.get(peer, 0) + 1
+
+    def record_bytes(self, size):
+        """Payload progress as blocks arrive: a smoother goodput signal than pieces."""
+        now = self.clock()
+        if self.epoch_start is None:
+            self.epoch_start = now
+        self.epoch_bytes += size
+        self.total_bytes += size
+        self._maybe_end_epoch(now)
+
+    def _maybe_end_epoch(self, now):
+        if self.epoch_start is None or now - self.epoch_start < self.epoch_seconds:
+            return
+        goodput = self.epoch_bytes / (now - self.epoch_start)
+        self.recent_goodput = goodput
+        self.history.append((self.slots, round(goodput)))
+        if len(self.history) > 64:
+            del self.history[0]
+        self.epoch_start, self.epoch_bytes = now, 0
+        if self.trial:
+            if goodput > self.reference * (1 + self.min_gain):
+                self.accepted, self.reference = self.slots, goodput
+            else:
+                self.slots, self.cooldown = self.accepted, 2
+            self.trial = False
+        elif self.reference is None or self.slots == self.accepted:
+            # Track drift at the accepted count, so a growing swarm is not
+            # compared to a stale, low reference.
+            self.reference = goodput if self.reference is None else max(goodput, 0.5 * self.reference + 0.5 * goodput)
+        if self.cooldown:
+            self.cooldown -= 1
+        elif not self.trial and self.slots < self.max_slots:
+            self.slots = min(self.max_slots, 2 * self.slots)
+            self.trial = True
+
+    # Decisions ---------------------------------------------------------------------
+
+    def target_concurrency(self):
+        self._maybe_end_epoch(self.clock())
+        return self.slots
+
+    def pipeline_for(self, peer):
+        rate = self.rates.get(peer)
+        if rate is None:
+            return self.initial_window
+        return max(4, min(self.max_window, math.ceil(rate * self.queue_seconds / 16384)))
+
+    def choose(self, peers, observations):
+        unseen = [p for p in peers if p not in self.rates
+                  and not (p in observations and observations[p].failures)]
+        if unseen:
+            return unseen[0]
+        return max(peers, key=lambda p: self.rates.get(p, 0.0) / (1 + observations.get(p, Observation()).failures))
+
+    def choose_with_context(self, peers, observations, context):
+        known = [p for p in peers if p in self.rates]
+        unseen = [p for p in peers if p not in self.rates]
+        # Exploring costs one piece at an unknown speed; skip it near the tail,
+        # where a slow newcomer would hold the last piece.
+        if unseen and (not known or context.unclaimed_count > 2 * context.concurrency):
+            return unseen[0]
+        if not known:
+            return self.choose(peers, observations)
+        peer = max(known, key=lambda p: self.rates[p] / (1 + observations.get(p, Observation()).failures))
+        if context.active and self.too_slow_for_tail(peer, context):
+            self.deferrals += 1
+            return None
+        return peer
+
+    def too_slow_for_tail(self, peer, context):
+        """Would one more piece from peer finish well after all other remaining work?"""
+        if not self.recent_goodput or context.unclaimed_count > 2 * context.concurrency:
+            return False
+        piece_time = context.piece_size / self.rates[peer]
+        in_flight = sum(max(0, a.size - a.received) for a in context.active.values())
+        finish_time = (context.unclaimed_count * context.piece_size + in_flight) / self.recent_goodput
+        return piece_time > 2 * finish_time
+
+    def continue_stream(self, peer, context, idle):
+        """May a streaming peer claim another piece? (Called before each claim.)"""
+        rate = self.rates.get(peer)
+        if rate is None:
+            return True  # still delivering its first piece; nothing learned yet
+        if self.too_slow_for_tail(peer, context):
+            self.stops += 1
+            return False
+        if len(context.active) >= context.concurrency:
+            # Every slot is busy: hand this slot to a much faster idle peer.
+            if any(self.rates.get(other, 0.0) > 2 * rate for other in idle):
+                self.rotations += 1
+                return False
+        return True
+
+    def abandon(self, peer, rate, context, idle):
+        """End a slow stream mid-piece? rate is its measured payload rate so far."""
+        active = context.active.get(peer)
+        if active is None or rate <= 0 or not self.recent_goodput:
+            return False
+        projected = max(0, active.size - active.received) / rate
+        if projected < 2.0:
+            return False  # nearly done: finishing is cheaper than starting over
+        in_flight = sum(max(0, a.size - a.received) for a in context.active.values())
+        finish_time = (context.unclaimed_count * context.piece_size + in_flight) / self.recent_goodput
+        if projected > 3 * finish_time:
+            self.abandons += 1
+            return True
+        if len(context.active) >= context.concurrency and any(self.rates.get(o, 0.0) > 4 * rate for o in idle):
+            self.abandons += 1
+            return True
+        return False
+
+    def diagnostics(self):
+        return dict(slots=self.slots, accepted_slots=self.accepted, deferrals=self.deferrals,
+                    abandons=self.abandons,
+                    tail_stops=self.stops, rotations=self.rotations,
+                    learned_peers=len(self.rates), epochs=list(self.history),
+                    median_window=sorted(self.pipeline_for(p) for p in self.rates)[len(self.rates) // 2]
+                    if self.rates else None)
+
+
 class PlannedHeuristic(AdaptivePolicy):
     """Evaluation ablation: the same planner with lifetime throughput estimates."""
 

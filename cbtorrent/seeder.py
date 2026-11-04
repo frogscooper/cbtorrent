@@ -85,16 +85,19 @@ class FileSource:
 
 class SeedServer:
     def __init__(self, torrent, source, *, metrics=None, peer_id=None, max_clients=32,
-                 timeout=30.0, rate=0, latency=0.0, pex_factory=None):
-        if max_clients < 1 or timeout <= 0 or rate < 0 or latency < 0:
+                 timeout=30.0, rate=0, latency=0.0, pex_factory=None, delay=0.0):
+        """rate and latency serialize each block (a slow peer). delay is a pipelined
+        network delay standing in for round-trip time: a reply is sent no earlier
+        than delay after its request arrived, while rate still limits the link."""
+        if max_clients < 1 or timeout <= 0 or rate < 0 or latency < 0 or delay < 0:
             raise ValueError("invalid seed server limits")
-        if not all(math.isfinite(x) for x in (timeout, rate, latency)):
+        if not all(math.isfinite(x) for x in (timeout, rate, latency, delay)):
             raise ValueError("seed limits must be finite")
         self.torrent, self.source = torrent, source
         self.metrics = metrics or Metrics()
         self.peer_id = peer_id or b"-CB0002-" + os.urandom(12)
         self.max_clients, self.timeout = max_clients, timeout
-        self.rate, self.latency = rate, latency
+        self.rate, self.latency, self.delay = rate, latency, delay
         self.pex_factory = pex_factory if not torrent.private else None
         self.server = None
         self.tasks = set()
@@ -135,14 +138,23 @@ class SeedServer:
             await peer.send(message(5, bitfield))
             self.peers.add(peer)
 
+            arrived = {}
+            link_free = [0.0]
+
             async def upload():
+                loop = asyncio.get_running_loop()
                 while True:
                     await wake.wait()
                     while queue:
                         request = queue[0]
                         index, offset, length = request
-                        if self.latency or self.rate:
+                        if self.delay:
+                            start = max(arrived.get(request, loop.time()) + self.delay, link_free[0])
+                            link_free[0] = start + (length / self.rate if self.rate else 0)
+                            await asyncio.sleep(max(0.0, link_free[0] - loop.time()))
+                        elif self.latency or self.rate:
                             await asyncio.sleep(self.latency + (length / self.rate if self.rate else 0))
+                        arrived.pop(request, None)
                         # A cancel or not-interested can remove the queued request while asleep.
                         if not interested or not queue or queue[0] != request:
                             continue
@@ -162,6 +174,7 @@ class SeedServer:
                     elif kind == 3:
                         interested = False
                         queue.clear()
+                        arrived.clear()
                     elif kind in (6, 8):
                         if len(payload) != 12:
                             raise ValueError("malformed request/cancel")
@@ -170,6 +183,7 @@ class SeedServer:
                         if not 0 < length <= BLOCK_SIZE or offset + length > self.torrent.piece_size(index):
                             raise ValueError("invalid block request bounds")
                         if kind == 8:
+                            arrived.pop(request, None)
                             try:
                                 queue.remove(request)
                             except ValueError:
@@ -179,6 +193,8 @@ class SeedServer:
                                 raise ValueError("peer exceeded request queue limit")
                             if request not in queue:
                                 queue.append(request)
+                                if self.delay:
+                                    arrived[request] = asyncio.get_running_loop().time()
                                 wake.set()
                     elif kind == 7:
                         raise ValueError("unsolicited upload to seed")

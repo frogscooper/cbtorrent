@@ -12,7 +12,7 @@ from .metainfo import Torrent, create
 from .magnet import Magnet, load_source, download_magnet
 from .metrics import Metrics
 from .policy import (AdaptivePolicy, BanditPolicy, OptimisticPolicy, RecoveryPolicy,
-                     ThroughputPolicy, TimeBudgetPolicy)
+                     ThroughputPolicy, TimeBudgetPolicy, LearnedPolicy)
 from .seeder import FileSource, SeedServer
 from .portmap import PortMapper
 from .tracker import announce
@@ -133,7 +133,7 @@ def build_parser():
                      help="seconds without block progress before a tail helper")
     get.add_argument("--endgame-budget", type=int, default=131072,
                      help="maximum reserved helper-request bytes per download")
-    get.add_argument("--policy", choices=("heuristic", "bandit", "adaptive", "optimistic", "recovery", "timed"), default="heuristic")
+    get.add_argument("--policy", choices=("heuristic", "bandit", "adaptive", "optimistic", "recovery", "timed", "learned"), default="heuristic")
     get.add_argument("--resume", action="store_true")
     get.add_argument("--no-trackers", action="store_true")
     get.add_argument("--listen-host", default="0.0.0.0")
@@ -170,7 +170,7 @@ def build_parser():
     gui.add_argument("--metadata-timeout", type=float, default=60.0)
     gui.add_argument("--peer", type=endpoint, action="append", default=[])
     gui.add_argument("--output", type=Path)
-    gui.add_argument("--policy", choices=("heuristic", "bandit", "adaptive", "optimistic", "recovery", "timed"), default="heuristic")
+    gui.add_argument("--policy", choices=("heuristic", "bandit", "adaptive", "optimistic", "recovery", "timed", "learned"), default="heuristic")
     gui.add_argument("--timeout", type=float, default=15.0)
     gui.add_argument("--piece-timeout", type=float, default=120.0)
     gui.add_argument("--pipeline", type=int, default=8)
@@ -222,7 +222,8 @@ def main(argv=None):
             args.output.parent.mkdir(parents=True, exist_ok=True)
             policy = {"heuristic": ThroughputPolicy, "bandit": BanditPolicy,
                       "adaptive": AdaptivePolicy, "optimistic": OptimisticPolicy,
-                      "recovery": RecoveryPolicy, "timed": TimeBudgetPolicy}[args.policy]()
+                      "recovery": RecoveryPolicy, "timed": TimeBudgetPolicy,
+                      "learned": LearnedPolicy}[args.policy]()
             def progress(done, total):
                 print(f"{done}/{total} verified bytes", file=sys.stderr)
             runner = download_magnet if isinstance(torrent, Magnet) else download

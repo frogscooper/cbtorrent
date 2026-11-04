@@ -1,6 +1,6 @@
 """Shared tkinter chrome for the desktop GUI."""
 from ..policy import (AdaptivePolicy, BanditPolicy, OptimisticPolicy, RecoveryPolicy,
-                      ThroughputPolicy, TimeBudgetPolicy)
+                      ThroughputPolicy, TimeBudgetPolicy, LearnedPolicy)
 
 BG = "#1e1e1e"
 PANEL = "#2a2a2a"
@@ -15,4 +15,5 @@ POLICIES = {
     "optimistic": OptimisticPolicy,
     "recovery": RecoveryPolicy,
     "timed": TimeBudgetPolicy,
+    "learned": LearnedPolicy,
 }

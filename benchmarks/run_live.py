@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-POLICIES = ("heuristic", "bandit", "adaptive", "optimistic", "recovery", "timed")
+POLICIES = ("heuristic", "bandit", "adaptive", "optimistic", "recovery", "timed", "learned")
 KEPT_METRICS = ("complete", "completion_seconds", "elapsed_seconds", "cpu_seconds",
                 "verified_bytes", "payload_received_bytes", "wasted_payload_bytes",
                 "wire_sent_bytes", "wire_received_bytes", "protocol_overhead_bytes",
