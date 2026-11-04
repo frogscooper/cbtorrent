@@ -6,6 +6,14 @@ is pre-1.0 and experimental: minor versions may change CLI flags and report form
 
 ## Unreleased
 
+Nothing yet.
+
+## 0.3.1
+
+Reliability fixes found by the first live (public-swarm) smoke test. Reports gain
+a `peer_failure_phases` field, and a peer's first observation no longer includes
+connection setup time (see Changed).
+
 ### Changed
 
 - Connection attempts run ahead of transfer slots (up to 8 half-open), so
