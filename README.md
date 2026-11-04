@@ -494,6 +494,29 @@ test orchestration and disk verification; they are not download benchmarks.
 API startup, seed-readiness handshake probes, and qBittorrent resource use are
 outside cbtorrent's transfer counters. Remote API byte statistics can lag completion.
 
+## Live swarm comparison
+
+`benchmarks/run_live.py` compares policies on real public swarms. It is a manual
+experiment, not a CI test, and it uses trackers, DHT, PEX, and real peers. Only
+use torrents you are allowed to download and share.
+
+```bash
+python benchmarks/run_live.py --torrent debian.torrent --torrent arch.torrent \
+  --policies heuristic,adaptive --rounds 3 --deadline 1800 --report benchmarks/live-NEW.json
+```
+
+Each trial is a separate `cbtorrent download` process in a temporary directory
+that is deleted afterwards, with a hard wall-clock deadline. Within each round
+the policies run back to back in a seeded random order. The first policy listed
+is the baseline: `paired_vs_baseline` divides each policy's completion time by
+the baseline's in the same round and torrent, using only rounds where both
+completed. Timeouts (`deadline`), non-zero exits (`failed`), and missing reports
+are kept and counted, never dropped. Arguments after `--` go to `download`.
+
+A swarm changes between trials, so interleaving reduces drift but does not remove
+it. Results describe those swarms, from one network, at one time. Read the sample
+size and failure counts before the medians.
+
 ## Implemented
 
 - Bounded bencoding; single-file and multi-file v1 metainfo; canonical info hashing
