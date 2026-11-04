@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from .benchmark import run_benchmark
-from .client import DownloadError, download
+from .client import DownloadError, download, loopback_host
 from .dht import DhtDiscovery
 from .diagnostics import describe_error, install_reset_filter
 from .metainfo import Torrent, create
@@ -14,6 +14,7 @@ from .metrics import Metrics
 from .policy import (AdaptivePolicy, BanditPolicy, OptimisticPolicy, RecoveryPolicy,
                      ThroughputPolicy, TimeBudgetPolicy)
 from .seeder import FileSource, SeedServer
+from .portmap import PortMapper
 from .tracker import announce
 
 
@@ -37,7 +38,7 @@ async def seed_file(args):
     started = set()
     next_updates = {}
     port = 0
-    discovery = None
+    discovery = mapper = None
 
     async def update(url, event):
         try:
@@ -52,6 +53,15 @@ async def seed_file(args):
     install_reset_filter()
     try:
         port = await server.start(args.listen_host, args.port)
+        if not args.no_port_mapping and not loopback_host(args.listen_host):
+            def mapped(mapping):
+                nonlocal port
+                port = mapping.external_port
+                if discovery is not None:
+                    discovery.port = port
+                print(f"Port mapping: {mapping.method} external port {port}", flush=True)
+            mapper = PortMapper(port, on_mapped=mapped)
+            mapper.start()
         if not args.no_dht and not torrent.private:
             discovery = DhtDiscovery(torrent, port, metrics,
                                      bootstrap=args.dht_bootstrap, bind_host=args.listen_host)
@@ -68,6 +78,8 @@ async def seed_file(args):
         if discovery is not None:
             await discovery.close()
         await server.close()
+        if mapper is not None:
+            await mapper.close()
         source.close()
         if started:
             await asyncio.gather(*(update(url, "stopped") for url in tuple(started)))
@@ -169,6 +181,8 @@ def build_parser():
     gui.add_argument("--listen-host", default="0.0.0.0")
     gui.add_argument("--port", type=int, default=0)
     for command in (get, seed, gui):
+        command.add_argument("--no-port-mapping", action="store_true",
+                             help="do not ask the router (NAT-PMP/UPnP) to forward the listen port")
         command.add_argument("--no-dht", action="store_true", help="disable IPv4 DHT discovery and announcements")
         command.add_argument("--dht-bootstrap", type=endpoint, action="append", default=None,
                              help="DHT bootstrap HOST:PORT (repeatable; replaces built-in bootstrap nodes)")
@@ -201,7 +215,8 @@ def main(argv=None):
                 listen_port=args.port, timeout=args.timeout,
                 piece_timeout=args.piece_timeout, pipeline=args.pipeline,
                 concurrency=args.concurrency, max_connections=args.max_connections,
-                policy_name=args.policy, metadata_timeout=args.metadata_timeout)
+                policy_name=args.policy, metadata_timeout=args.metadata_timeout,
+                port_mapping=not args.no_port_mapping)
         if args.command == "download":
             torrent = load_source(args.torrent)
             args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -223,7 +238,7 @@ def main(argv=None):
                 peer_retries=args.peer_retries, retry_delay=args.retry_delay,
                 endgame=not args.no_endgame, endgame_delay=args.endgame_delay,
                 endgame_budget=args.endgame_budget,
-                use_pex=not args.no_pex,
+                use_pex=not args.no_pex, port_mapping=not args.no_port_mapping,
                 listen_host=args.listen_host, listen_port=args.port,
                 progress=progress if args.progress else None, **extra))
         elif args.command == "seed":

@@ -36,7 +36,8 @@ KEPT_METRICS = ("complete", "completion_seconds", "elapsed_seconds", "cpu_second
                 "uploaded_bytes", "connections", "peer_failures", "peer_retries",
                 "hash_failures", "peers_banned", "endgame_duplicate_bytes",
                 "tracker_requests", "tracker_failures", "dht_requests", "dht_failures",
-                "dht_peers", "pex_peers", "policy_seconds", "peer_failure_phases")
+                "dht_peers", "pex_peers", "policy_seconds", "peer_failure_phases",
+                "incoming_peers")
 
 
 ADDRESS = re.compile(r"\[[0-9A-Fa-f:.]+\](:\d+)?|\b(?:\d{1,3}\.){3}\d{1,3}(:\d+)?\b")
@@ -97,6 +98,10 @@ def run_trial(trial, deadline, extra_args, command=download_command):
         report = json.loads(report_path.read_text(encoding="utf-8"))
         metrics = {key: report.get(key) for key in KEPT_METRICS}
         metrics["dht_errors"] = [redact(str(e)) for e in (report.get("dht_errors") or [])[:10]]
+        mapping = report.get("port_mapping")
+        if isinstance(mapping, dict):
+            mapping = dict(mapping, errors=[redact(str(e)) for e in mapping.get("errors", [])])
+        metrics["port_mapping"] = mapping
     except (OSError, ValueError):
         if outcome == "ok":
             outcome = "no-report"

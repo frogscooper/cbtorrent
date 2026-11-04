@@ -126,6 +126,7 @@ class SeedServer:
                 raise ValueError("invalid incoming handshake")
             await peer.send(PROTOCOL + RESERVED + self.torrent.info_hash + self.peer_id)
             peer.handshaken = True
+            self.metrics.incoming_peers += 1
             if reply[25] & 0x10:
                 await peer.send(extension_handshake(peer.extensions.info, pex=peer.pex is not None))
             bitfield = bytearray((len(self.torrent.hashes) + 7) // 8)

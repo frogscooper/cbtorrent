@@ -285,3 +285,24 @@ look fast by failing.
 
 **Try yourself:** In `benchmarks/live-swarm-20261103.json`, find `uploaded_bytes`
 in any trial. Explain why it is 0 using the "Limits" section of the README.
+
+## [#24 — Port mapping](https://github.com/frogscooper/cbtorrent/pull/24)
+
+**What changed:** cbtorrent now asks the home router to forward its listen port,
+so peers can connect to us and we can upload. The live run in #23 had zero
+uploads because nobody could reach us.
+
+**How it works:** `PortMapper` in `cbtorrent/portmap.py` runs in the background
+after the listener starts. It tries NAT-PMP (one UDP packet to the gateway), then
+UPnP (find the router with SSDP, read its XML, send `AddPortMapping`). If the
+router gives a different outside port, `download()` announces that one instead.
+The mapping is renewed and deleted on exit.
+
+**Tradeoff:** Mapping never delays the start, so the first tracker announce can
+carry the inside port. Later announces fix it.
+
+**Read first:** `PortMapper._map()`, then `tests/test_portmap.py`.
+
+**Try yourself:** Remove the `IP_MULTICAST_IF` line in `ssdp_search()`. On a
+computer with a VPN adapter, the search can now leave through the wrong network.
+Explain why the fake-router tests still pass.

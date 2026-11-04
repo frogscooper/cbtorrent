@@ -348,6 +348,30 @@ They are subsets of `wire_*` and existing protocol overhead; do not add them aga
 when calculating total traffic. Policy benchmarks disable PEX and DHT. Their code
 fingerprint now also covers PEX, extension negotiation, and metric definitions.
 
+### Port mapping
+
+Peers behind a home router can only connect to us if the router forwards our
+listen port. `download`, `seed`, and the GUI ask the router to do that, in the
+background, so the download never waits for it: first NAT-PMP (RFC 6886) to the
+default gateway, then UPnP IGD (SSDP search on the adapter that faces the
+gateway, then `AddPortMapping` for TCP). The mapping is renewed at half its
+lease and removed on exit. If the router grants a different external port,
+later tracker and DHT announces use it. Only private-network gateways are
+contacted, every step has a deadline and a 64 KiB response limit, and gateway
+XML that declares a DTD is rejected. Use `--no-port-mapping` to turn it off.
+Listeners bound to loopback are never mapped, and the `download()` API defaults
+to off.
+
+Reports add `port_mapping` (`mapped`, `method`, `internal_port`, `external_port`,
+`lifetime`, and error samples, never an IP address) and `incoming_peers` (inbound
+connections that completed a handshake).
+
+Many routers ship with UPnP and NAT-PMP turned off. Then `port_mapping.errors`
+says that no gateway answered. Either turn on UPnP in the router, or pick a fixed
+port with `--port`, forward that TCP port to this computer by hand, and allow it
+through the OS firewall. On Windows the firewall may also block inbound
+connections to Python even when the router forwards them.
+
 ## Peer policies
 
 | Name | Role |
@@ -539,8 +563,8 @@ the first 8 unique tracker URLs. Incoming clients use a separate cap equal to
 
 ## Limits
 
-Not present: uTP, encryption, v2 torrents,
-automatic NAT mapping, classic tit-for-tat upload slots. Outbound connections
+Not present: uTP, encryption, v2 torrents, PCP and IPv6 port mapping,
+classic tit-for-tat upload slots. Outbound connections
 are download-oriented; uploads use the incoming listener. Peer recovery is bounded
 within one run; bans and policy state do not persist across restarts. Storage and hashing run on the event loop. Publication uses an
 exclusive hard link in the same directory when the filesystem supports it; otherwise the

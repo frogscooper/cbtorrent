@@ -29,7 +29,8 @@ def create_window(torrent: Path | None = None, output: Path | None = None, *, pe
         resume=False, use_trackers=True, listen_host="0.0.0.0", listen_port=0,
         timeout=15.0, piece_timeout=120.0, pipeline=8, concurrency=4,
         max_connections=16, policy_name="heuristic",
-        session_path: Path | None = None, use_dht=True, dht_bootstrap=None, metadata_timeout=60.0, root=None):
+        session_path: Path | None = None, use_dht=True, dht_bootstrap=None, metadata_timeout=60.0, root=None,
+        port_mapping=False):
     _NO_DISPLAY = (
         "Desktop GUI needs a display and tkinter. Install the OS tk package "
         "(e.g. python3-tk) or use `cbtorrent download` instead."
@@ -56,7 +57,7 @@ def create_window(torrent: Path | None = None, output: Path | None = None, *, pe
         use_dht=use_dht, dht_bootstrap=dht_bootstrap,
         listen_host=listen_host, listen_port=listen_port, timeout=timeout,
         piece_timeout=piece_timeout, pipeline=pipeline, concurrency=concurrency,
-        max_connections=max_connections,
+        max_connections=max_connections, port_mapping=port_mapping,
     )
 
     def load_meta(item) -> Torrent | None:
@@ -269,6 +270,7 @@ def create_window(torrent: Path | None = None, output: Path | None = None, *, pe
                 pipeline=download_opts["pipeline"],
                 concurrency=download_opts["concurrency"],
                 max_connections=download_opts["max_connections"],
+                port_mapping=download_opts["port_mapping"],
                 policy=POLICIES.get(item.policy, POLICIES["heuristic"])(),
                 item_id=item.id, metadata_timeout=metadata_timeout, metadata_cache=metadata_cache)
         except (OSError, ValueError, RuntimeError) as error:

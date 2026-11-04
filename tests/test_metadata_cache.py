@@ -263,7 +263,7 @@ class CacheWorkflowTests(unittest.IsolatedAsyncioTestCase):
             output = self.root / f"cli-{i}"
             process = await asyncio.create_subprocess_exec(
                 sys.executable, "-m", "cbtorrent", "download", uri, "--output", str(output),
-                "--no-trackers", "--no-dht", "--metadata-cache-dir", str(self.cache.path),
+                "--no-trackers", "--no-dht", "--no-port-mapping", "--metadata-cache-dir", str(self.cache.path),
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             try:
                 out, err = await asyncio.wait_for(process.communicate(), 10)

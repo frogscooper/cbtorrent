@@ -1,5 +1,6 @@
 """Concurrent session with bounded peer scheduling and verified disk commits."""
 import asyncio
+import ipaddress
 import math
 import os
 from dataclasses import asdict
@@ -13,6 +14,7 @@ from .diagnostics import describe_error, install_reset_filter
 from .observe import build_snapshot
 from .policy import ActiveTransfer, Observation, SchedulingContext, ThroughputPolicy
 from .pex import PexSession
+from .portmap import PortMapper
 from .seeder import SeedServer
 from .storage import Storage
 from .tracker import announce
@@ -36,17 +38,29 @@ class MixedPieceError(ValueError):
 DIAL_AHEAD = 8
 
 
+def loopback_host(host):
+    """A listener on loopback cannot be reached through the gateway, so never map it."""
+    if host in ("localhost", ""):
+        return host == "localhost"
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=120.0,
                    pipeline=8, policy=None, concurrency=4, max_connections=16,
                    resume=False, use_trackers=True, listen_host="127.0.0.1",
                    listen_port=0, progress=None, observe=None,
                    use_dht=False, dht_bootstrap=None, peer_retries=2, retry_delay=0.5,
                    endgame=True, endgame_delay=1.0, endgame_budget=128 * 1024,
-                   use_pex=True):
+                   use_pex=True, port_mapping=False):
     """Each task owns one connection. Endgame can share one piece assembly.
 
     Storage operations run on the event loop, preventing shared seek races.
     Verified partial pieces are available through the incoming TCP listener.
+    With port_mapping, the listener is mapped on the LAN gateway in the
+    background (NAT-PMP, then UPnP) so peers behind NAT can connect to us.
     """
     peers = list(dict.fromkeys(peers))
     if len(peers) > 200:
@@ -86,10 +100,11 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
     pex_task = None
     storage = server = tracker_task = None
     discovery = None
+    mapper = None
     tracker_urls = torrent.trackers[:8] if use_trackers else ()
     started_trackers = set()
     intervals = {}
-    port = 0
+    port = 0  # the port we announce: the router's external port once mapped
 
     def connected_peers():
         return tuple(peer.writer.get_extra_info("peername")[:2] for peer in sessions.values()
@@ -133,6 +148,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         result["peer_failure_phases"] = dict(failure_phases)
         result["tracker_errors"] = list(tracker_errors)
         result["dht_errors"] = list(discovery.errors) if discovery else []
+        result["port_mapping"] = mapper.status() if mapper else None
         if hasattr(policy, "diagnostics"):
             result["policy_diagnostics"] = policy.diagnostics()
         return result
@@ -395,6 +411,14 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         server = SeedServer(torrent, storage, metrics=metrics, peer_id=peer_id,
                             timeout=timeout, max_clients=max_connections, pex_factory=make_pex)
         port = await server.start(listen_host, listen_port)
+        if port_mapping and not loopback_host(listen_host):
+            def mapped(mapping):
+                nonlocal port
+                port = mapping.external_port
+                if discovery is not None:
+                    discovery.port = port
+            mapper = PortMapper(port, on_mapped=mapped)
+            mapper.start()
         if use_pex and not torrent.private:
             pex_task = asyncio.create_task(refresh_pex())
         if remaining and use_dht and not torrent.private:
@@ -607,6 +631,8 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
         await asyncio.gather(*tasks, *dialing, return_exceptions=True)
         if server is not None:
             await server.close()
+        if mapper is not None:
+            await mapper.close()
         await asyncio.gather(*(peer.close() for peer in sessions.values()))
         if storage is not None:
             storage.close()

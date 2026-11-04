@@ -19,6 +19,7 @@ class Metrics:
     dht_failures: int = 0
     dht_peers: int = 0
     connections: int = 0
+    incoming_peers: int = 0
     peer_failures: int = 0
     hash_failures: int = 0
     peer_retries: int = 0

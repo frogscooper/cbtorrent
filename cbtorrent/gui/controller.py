@@ -49,7 +49,7 @@ class DownloadController:
               use_trackers=True, listen_host="0.0.0.0", listen_port=0,
               timeout=15.0, piece_timeout=120.0, pipeline=8, concurrency=4,
               max_connections=16, policy=None, item_id=None, use_dht=False, dht_bootstrap=None,
-              metadata_timeout=60.0, metadata_cache=None):
+              metadata_timeout=60.0, metadata_cache=None, port_mapping=False):
         if self.busy:
             raise RuntimeError("download already running")
         self._cancel_requested.clear()
@@ -82,7 +82,7 @@ class DownloadController:
                     concurrency=concurrency, max_connections=max_connections,
                     resume=resume, policy=policy, use_trackers=use_trackers,
                     use_dht=use_dht, dht_bootstrap=dht_bootstrap,
-                    listen_host=listen_host, listen_port=listen_port,
+                    listen_host=listen_host, listen_port=listen_port, port_mapping=port_mapping,
                     observe=self._observe, **extra))
                 if self._cancel_requested.is_set():
                     self._task.cancel()
