@@ -18,6 +18,7 @@ import argparse
 import json
 import platform
 import random
+import re
 import shutil
 import statistics
 import subprocess
@@ -36,6 +37,20 @@ KEPT_METRICS = ("complete", "completion_seconds", "elapsed_seconds", "cpu_second
                 "hash_failures", "peers_banned", "endgame_duplicate_bytes",
                 "tracker_requests", "tracker_failures", "dht_requests", "dht_failures",
                 "dht_peers", "pex_peers", "policy_seconds", "peer_failure_phases")
+
+
+ADDRESS = re.compile(r"\[[0-9A-Fa-f:.]+\](:\d+)?|\b(?:\d{1,3}\.){3}\d{1,3}(:\d+)?\b")
+
+
+def redact(text):
+    """Hide peer and node addresses; reports may be published."""
+    return ADDRESS.sub("<address>", text)
+
+
+def label(torrent):
+    """A .torrent file's name, never the local path; magnets are kept as given."""
+    text = str(torrent)
+    return text if text.startswith("magnet:") else Path(text).name
 
 
 def plan(torrents, policies, rounds, seed):
@@ -81,16 +96,16 @@ def run_trial(trial, deadline, extra_args, command=download_command):
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
         metrics = {key: report.get(key) for key in KEPT_METRICS}
-        metrics["dht_errors"] = (report.get("dht_errors") or [])[:10]
+        metrics["dht_errors"] = [redact(str(e)) for e in (report.get("dht_errors") or [])[:10]]
     except (OSError, ValueError):
         if outcome == "ok":
             outcome = "no-report"
     finally:
         shutil.rmtree(work, ignore_errors=True)
     complete = bool(metrics and metrics.get("complete")) and outcome == "ok"
-    return dict(trial, torrent=str(trial["torrent"]), outcome=outcome, complete=complete,
+    return dict(trial, torrent=label(trial["torrent"]), outcome=outcome, complete=complete,
                 exit_code=exit_code, wall_seconds=round(wall, 3), metrics=metrics,
-                stderr_tail=stderr_tail if not complete else "")
+                stderr_tail=redact(stderr_tail) if not complete else "")
 
 
 def median(values):

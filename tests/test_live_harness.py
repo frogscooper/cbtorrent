@@ -75,6 +75,19 @@ class TrialTests(unittest.TestCase):
         self.assertEqual(row["outcome"], "no-report")
         self.assertFalse(row["complete"])
 
+    def test_report_rows_hide_local_paths_and_peer_addresses(self):
+        script = ("import json,sys\n"
+                  "open(sys.argv[1],'w').write(json.dumps(dict(complete=False, dht_errors=["
+                  "'get_peers 203.0.113.9:6881: no reply', 'ping [2001:db8::1]:6881: reset'])))\n"
+                  "sys.stderr.write('peer 198.51.100.7:51413 refused'); sys.exit(1)\n")
+        trial = dict(self.trial(), torrent=str(Path(tempfile.gettempdir()) / "secret" / "x.torrent"))
+        row = run_live.run_trial(trial, 30, [], command=fake(script))
+        self.assertEqual(row["torrent"], "x.torrent")
+        self.assertEqual(row["metrics"]["dht_errors"],
+                         ["get_peers <address>: no reply", "ping <address>: reset"])
+        self.assertEqual(row["stderr_tail"], "peer <address> refused")
+        self.assertEqual(run_live.label("magnet:?xt=urn:btih:ab"), "magnet:?xt=urn:btih:ab")
+
     def test_work_directory_is_removed(self):
         before = set(Path(tempfile.gettempdir()).glob("cbtorrent-live-*"))
         run_live.run_trial(self.trial(), 30, [], command=fake(report_script(True)))

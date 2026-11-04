@@ -515,7 +515,8 @@ are kept and counted, never dropped. Arguments after `--` go to `download`.
 
 A swarm changes between trials, so interleaving reduces drift but does not remove
 it. Results describe those swarms, from one network, at one time. Read the sample
-size and failure counts before the medians.
+size and failure counts before the medians. First results:
+[live experiment](benchmarks/LIVE_EXPERIMENT.md).
 
 ## Implemented
 
