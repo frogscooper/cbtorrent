@@ -22,7 +22,7 @@ is pre-1.0 and experimental: minor versions may change CLI flags and report form
   default. Live Debian and Arch: faster in 8 of 8 pairs (median time ratio 0.18);
   slower than heuristic in the sub-second `mixed` benchmark fixture. See
   `benchmarks/LEARNED_EXPERIMENT.md`. Adds `Peer.download_stream`,
-  `SeedServer(delay=...)`, and `benchmarks/run_swarm_sim.py`.
+  `SeedServer(delay=...)`, and `benchmarks/run_swarm_sim.py` (#25).
 
 ## 0.3.1
 

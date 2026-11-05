@@ -307,7 +307,7 @@ carry the inside port. Later announces fix it.
 computer with a VPN adapter, the search can now leave through the wrong network.
 Explain why the fake-router tests still pass.
 
-## #25 — Learned streaming policy
+## [#25 — Learned streaming policy](https://github.com/frogscooper/cbtorrent/pull/25)
 
 **What changed:** `--policy learned` is a new opt-in policy. On live Debian and Arch
 downloads it was faster than `heuristic` in 8 of 8 pairs, often 4–6×.
