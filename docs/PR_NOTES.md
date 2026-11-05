@@ -286,7 +286,7 @@ look fast by failing.
 **Try yourself:** In `benchmarks/live-swarm-20261103.json`, find `uploaded_bytes`
 in any trial. Explain why it is 0 using the "Limits" section of the README.
 
-## [#24 � Port mapping](https://github.com/frogscooper/cbtorrent/pull/24)
+## [#24 — Port mapping](https://github.com/frogscooper/cbtorrent/pull/24)
 
 **What changed:** cbtorrent now asks the home router to forward its listen port,
 so peers can connect to us and we can upload. The live run in #23 had zero
@@ -306,3 +306,23 @@ carry the inside port. Later announces fix it.
 **Try yourself:** Remove the `IP_MULTICAST_IF` line in `ssdp_search()`. On a
 computer with a VPN adapter, the search can now leave through the wrong network.
 Explain why the fake-router tests still pass.
+
+## #25 — Learned streaming policy
+
+**What changed:** `--policy learned` is a new opt-in policy. On live Debian and Arch
+downloads it was faster than `heuristic` in 8 of 8 pairs, often 4–6×.
+
+**How it works:** The old engine drained each connection's 8 requests at every
+piece boundary. `Peer.download_stream` claims the next piece before the current one
+finishes. `LearnedPolicy` measures each peer's rate and keeps about 1.5 seconds of
+requests in flight to it. It tries more slots and keeps them only if goodput
+rises. `client.py` still verifies and commits every piece.
+
+**Tradeoff:** Abandoning a slow piece throws away its partial blocks. That waste is
+small, but short downloads can be slower (the `mixed` fixture).
+
+**Read first:** `stream()` in `cbtorrent/client.py`, `LearnedPolicy` in
+`cbtorrent/policy.py`, then `tests/test_learned.py`.
+
+**Try yourself:** Run `benchmarks/run_swarm_sim.py --configs heuristic,learned`
+with `max_pieces=1` in `download_stream`. How much of the gain is left?

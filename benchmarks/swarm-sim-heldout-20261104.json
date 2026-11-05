@@ -1,0 +1,463 @@
+{
+  "schema_version": 1,
+  "suite": "swarm-sim",
+  "python": "3.13.2",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "trials": 5,
+  "size_mib": 48.0,
+  "peers": 30,
+  "dead": 8,
+  "seed": 20261104,
+  "piece_kib": 256,
+  "configs": {
+    "heuristic": {
+      "policy": "ThroughputPolicy",
+      "concurrency": 4,
+      "pipeline": 8
+    },
+    "wide-static": {
+      "policy": "ThroughputPolicy",
+      "concurrency": 12,
+      "pipeline": 64
+    },
+    "learned": {
+      "policy": "LearnedPolicy",
+      "concurrency": 4,
+      "pipeline": 8
+    }
+  },
+  "note": "Run from the checkout:     python benchmarks/run_swarm_sim.py --trials 5 --report benchmarks/swarm-sim-NEW.json",
+  "summary": {
+    "heuristic": {
+      "attempts": 5,
+      "completed": 5,
+      "median_seconds": 28.57321449997835,
+      "seconds": [
+        28.57,
+        34.12,
+        28.35,
+        20.56,
+        30.46
+      ],
+      "median_ratio_vs_baseline": 1.0,
+      "faster_than_baseline": 0,
+      "pairs": 5
+    },
+    "wide-static": {
+      "attempts": 5,
+      "completed": 5,
+      "median_seconds": 14.701848199940287,
+      "seconds": [
+        14.6,
+        15.11,
+        14.7,
+        10.31,
+        15.14
+      ],
+      "median_ratio_vs_baseline": 0.5012857540325832,
+      "faster_than_baseline": 5,
+      "pairs": 5
+    },
+    "learned": {
+      "attempts": 5,
+      "completed": 5,
+      "median_seconds": 7.771418099990115,
+      "seconds": [
+        6.9,
+        12.63,
+        13.12,
+        7.76,
+        7.77
+      ],
+      "median_ratio_vs_baseline": 0.3701108780315552,
+      "faster_than_baseline": 5,
+      "pairs": 5
+    }
+  },
+  "rows": [
+    {
+      "trial": 0,
+      "config": "wide-static",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 14.596372800064273,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50374192,
+        "wasted_payload_bytes": 0,
+        "connections": 20,
+        "peer_failures": 4,
+        "cpu_seconds": 0.75,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": null
+      }
+    },
+    {
+      "trial": 0,
+      "config": "heuristic",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 28.57321449997835,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50374192,
+        "wasted_payload_bytes": 0,
+        "connections": 20,
+        "peer_failures": 4,
+        "cpu_seconds": 1.265625,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": null
+      }
+    },
+    {
+      "trial": 0,
+      "config": "learned",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 6.897713500075042,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50997930,
+        "wasted_payload_bytes": 622592,
+        "connections": 28,
+        "peer_failures": 7,
+        "cpu_seconds": 0.421875,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": {
+          "slots": 14,
+          "accepted_slots": 14,
+          "deferrals": 39,
+          "abandons": 7,
+          "tail_stops": 4,
+          "rotations": 0,
+          "learned_peers": 16,
+          "epochs": [
+            [
+              8,
+              7180336
+            ],
+            [
+              14,
+              10294510
+            ],
+            [
+              14,
+              7653109
+            ]
+          ],
+          "median_window": 21
+        }
+      },
+      "swarm_total_rate": 16068268
+    },
+    {
+      "trial": 1,
+      "config": "wide-static",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 15.113313199952245,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50374192,
+        "wasted_payload_bytes": 0,
+        "connections": 21,
+        "peer_failures": 5,
+        "cpu_seconds": 1.03125,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": null
+      }
+    },
+    {
+      "trial": 1,
+      "config": "learned",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 12.629977900069207,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50521928,
+        "wasted_payload_bytes": 147456,
+        "connections": 26,
+        "peer_failures": 7,
+        "cpu_seconds": 1.21875,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": {
+          "slots": 14,
+          "accepted_slots": 14,
+          "deferrals": 6,
+          "abandons": 5,
+          "tail_stops": 5,
+          "rotations": 0,
+          "learned_peers": 16,
+          "epochs": [
+            [
+              8,
+              4040105
+            ],
+            [
+              14,
+              4635744
+            ],
+            [
+              14,
+              4710921
+            ],
+            [
+              14,
+              4685632
+            ],
+            [
+              14,
+              5282929
+            ],
+            [
+              14,
+              1716347
+            ]
+          ],
+          "median_window": 12
+        }
+      }
+    },
+    {
+      "trial": 1,
+      "config": "heuristic",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 34.12484919989947,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50374192,
+        "wasted_payload_bytes": 0,
+        "connections": 21,
+        "peer_failures": 5,
+        "cpu_seconds": 1.09375,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": null
+      },
+      "swarm_total_rate": 11237815
+    },
+    {
+      "trial": 2,
+      "config": "wide-static",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 14.701848199940287,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50374192,
+        "wasted_payload_bytes": 0,
+        "connections": 20,
+        "peer_failures": 4,
+        "cpu_seconds": 0.828125,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": null
+      }
+    },
+    {
+      "trial": 2,
+      "config": "learned",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 13.123269199975766,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50850031,
+        "wasted_payload_bytes": 475136,
+        "connections": 25,
+        "peer_failures": 6,
+        "cpu_seconds": 1.125,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": {
+          "slots": 14,
+          "accepted_slots": 14,
+          "deferrals": 16,
+          "abandons": 5,
+          "tail_stops": 7,
+          "rotations": 0,
+          "learned_peers": 16,
+          "epochs": [
+            [
+              8,
+              1928998
+            ],
+            [
+              14,
+              4579179
+            ],
+            [
+              14,
+              4780695
+            ],
+            [
+              14,
+              4810589
+            ],
+            [
+              14,
+              4927432
+            ],
+            [
+              14,
+              4078666
+            ]
+          ],
+          "median_window": 27
+        }
+      }
+    },
+    {
+      "trial": 2,
+      "config": "heuristic",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 28.3489178000018,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50374192,
+        "wasted_payload_bytes": 0,
+        "connections": 20,
+        "peer_failures": 4,
+        "cpu_seconds": 1.546875,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": null
+      },
+      "swarm_total_rate": 11762476
+    },
+    {
+      "trial": 3,
+      "config": "wide-static",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 10.306843299884349,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50374029,
+        "wasted_payload_bytes": 0,
+        "connections": 22,
+        "peer_failures": 7,
+        "cpu_seconds": 0.8125,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": null
+      }
+    },
+    {
+      "trial": 3,
+      "config": "heuristic",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 20.560814299969934,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50374029,
+        "wasted_payload_bytes": 0,
+        "connections": 27,
+        "peer_failures": 12,
+        "cpu_seconds": 1.21875,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": null
+      }
+    },
+    {
+      "trial": 3,
+      "config": "learned",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 7.764706199988723,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50439943,
+        "wasted_payload_bytes": 65536,
+        "connections": 23,
+        "peer_failures": 5,
+        "cpu_seconds": 0.5,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": {
+          "slots": 14,
+          "accepted_slots": 14,
+          "deferrals": 1,
+          "abandons": 3,
+          "tail_stops": 5,
+          "rotations": 0,
+          "learned_peers": 15,
+          "epochs": [
+            [
+              8,
+              4667663
+            ],
+            [
+              14,
+              9408707
+            ],
+            [
+              14,
+              10063904
+            ]
+          ],
+          "median_window": 57
+        }
+      },
+      "swarm_total_rate": 15286065
+    },
+    {
+      "trial": 4,
+      "config": "learned",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 7.771418099990115,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50949228,
+        "wasted_payload_bytes": 573440,
+        "connections": 33,
+        "peer_failures": 8,
+        "cpu_seconds": 0.875,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": {
+          "slots": 14,
+          "accepted_slots": 14,
+          "deferrals": 39,
+          "abandons": 10,
+          "tail_stops": 3,
+          "rotations": 0,
+          "learned_peers": 14,
+          "epochs": [
+            [
+              8,
+              5908458
+            ],
+            [
+              14,
+              7982906
+            ],
+            [
+              14,
+              8431072
+            ]
+          ],
+          "median_window": 10
+        }
+      }
+    },
+    {
+      "trial": 4,
+      "config": "wide-static",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 15.139358699903823,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50373866,
+        "wasted_payload_bytes": 0,
+        "connections": 27,
+        "peer_failures": 13,
+        "cpu_seconds": 0.859375,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": null
+      }
+    },
+    {
+      "trial": 4,
+      "config": "heuristic",
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 30.45653610001318,
+        "verified_bytes": 50331648,
+        "wire_received_bytes": 50374192,
+        "wasted_payload_bytes": 0,
+        "connections": 30,
+        "peer_failures": 14,
+        "cpu_seconds": 0.96875,
+        "endgame_duplicate_bytes": 0,
+        "policy_diagnostics": null
+      },
+      "swarm_total_rate": 21280050
+    }
+  ]
+}

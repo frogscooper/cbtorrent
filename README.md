@@ -382,8 +382,10 @@ connections to Python even when the router forwards them.
 | `optimistic` | Opt-in adaptive variant with more optimistic exploration. |
 | `recovery` | Opt-in revisits of overlooked peers under a byte budget; can help or hurt. |
 | `timed` | Opt-in recovery plus a predicted time allowance for revisits. |
+| `learned` | Opt-in streaming with online-learned slot count, per-peer request windows, and peer ranking. See below. |
 
 All policies use one protocol engine, one piece scheduler, and the same connection caps.
+`learned` also changes how transfers run (streaming, below); the others do not.
 Malformed traffic and single-source hash failures disqualify a peer for that run.
 Chokes, disconnects, and timeouts get at most two reconnects per address, with
 exponential backoff starting at 0.5 seconds (capped at 30 seconds). Successful
@@ -401,6 +403,38 @@ python -m cbtorrent benchmark --trials 5 --size-mib 1 --seed 2026 --report bench
 
 These fixtures are regression and research tools. They do not model real congestion, NAT,
 public churn, or disk contention. Do not treat a localhost win as a public-swarm claim.
+
+### Learned streaming policy
+
+The default engine runs 4 transfer slots. Each slot fetches one piece with 8
+requests in flight, so a connection's request queue empties at the end of every
+piece and waits a round trip for the next. `--policy learned` changes three things,
+all learned during the download from its own verified data:
+
+- **Streaming.** A slot keeps its connection busy across pieces
+  (`Peer.download_stream`). It claims the next piece once every block in hand has
+  been requested, so new requests overlap the last replies. At most 3 pieces are
+  held per connection. Each piece is hash-checked and committed exactly as before.
+- **Request window per peer.** The EWMA of each peer's delivery rate sets its window
+  to cover 1.5 seconds of data (4–64 blocks).
+- **Slot count.** Hill climbing on goodput, counted per block: start at 8 slots,
+  try twice as many for a 2-second epoch, keep them only if goodput rose 5%, never
+  more than 14 or `--max-connections`.
+
+Peer choice: unknown peers get one exploration piece while plenty of work remains,
+then slots go to the fastest learned peers. The policy can also end a stream:
+- **Before a new claim:** it stops when the peer would finish one more piece well
+  after everything else, or when all slots are busy and an idle peer is more than
+  2× faster.
+- **Mid-piece (abandon):** it ends a stream whose piece would finish more than 3×
+  after all remaining work, or that is more than 4× slower than an idle peer while
+  the slots are full. The unfinished piece returns to the pool and its partial
+  blocks count as `wasted_payload_bytes`. An abandon is not a peer failure, but the
+  session is closed because cancelled blocks may still arrive.
+
+`policy_diagnostics` reports slots, epochs, abandons, tail stops, rotations, and the
+median window. Simulated swarm check with pipelined delay (`benchmarks/run_swarm_sim.py`,
+which adds `SeedServer(delay=...)`): [learned experiment](benchmarks/LEARNED_EXPERIMENT.md).
 
 ### Connection dial-ahead
 
