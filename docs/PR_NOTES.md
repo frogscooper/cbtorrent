@@ -327,7 +327,7 @@ small, but short downloads can be slower (the `mixed` fixture).
 **Try yourself:** Run `benchmarks/run_swarm_sim.py --configs heuristic,learned`
 with `max_pieces=1` in `download_stream`. How much of the gain is left?
 
-## #26 — Dial tests no longer race the clock
+## [#26 — Dial tests no longer race the clock](https://github.com/frogscooper/cbtorrent/pull/26)
 
 **What changed:** The two dial-ahead tests in `tests/test_dial.py` asserted that a
 download finished in under 0.9 s. On Windows one CI run took 1.19 s, and run alone
