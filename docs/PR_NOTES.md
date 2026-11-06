@@ -326,3 +326,24 @@ small, but short downloads can be slower (the `mixed` fixture).
 
 **Try yourself:** Run `benchmarks/run_swarm_sim.py --configs heuristic,learned`
 with `max_pieces=1` in `download_stream`. How much of the gain is left?
+
+## [#26 — Dial tests no longer race the clock](https://github.com/frogscooper/cbtorrent/pull/26)
+
+**What changed:** The two dial-ahead tests in `tests/test_dial.py` asserted that a
+download finished in under 0.9 s. On Windows one CI run took 1.19 s, and run alone
+locally the test failed every time, on `main` too.
+
+**Why it was slow:** `IsolatedAsyncioTestCase` runs the event loop in asyncio debug
+mode. Debug mode records a stack trace for every future and callback, and on
+Windows each record checks source files on disk. The engine was fine; the test
+loop was several times slower.
+
+**How it works now:** Each test checks what the bug would cause. Without dial-ahead,
+the only slot waits a full timeout on a bad address, and that address becomes a
+peer failure. So the tests require `peer_failures == 0` and a completion time below
+that timeout, which leaves seconds of headroom.
+
+**Read first:** `test_choking_peers_do_not_use_up_dial_slots` in `tests/test_dial.py`.
+
+**Try yourself:** Set `DIAL_AHEAD = 0` in `cbtorrent/client.py` and run
+`python -m unittest discover -s tests -p test_dial.py`. Which assertion fails, and why?
