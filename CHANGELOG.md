@@ -16,6 +16,13 @@ is pre-1.0 and experimental: minor versions may change CLI flags and report form
 - Automatic port mapping for the listener (NAT-PMP, then UPnP IGD), on by default
   for `download`, `seed`, and the GUI; `--no-port-mapping` turns it off. Reports
   add `port_mapping` and `incoming_peers` (#24).
+- `--policy learned`: streams pieces back to back on each connection, sizes each
+  peer's request window from its measured rate, hill-climbs the slot count on
+  goodput, and abandons slow streams near the end. Opt-in; `heuristic` stays the
+  default. Live Debian and Arch: faster in 8 of 8 pairs (median time ratio 0.18);
+  slower than heuristic in the sub-second `mixed` benchmark fixture. See
+  `benchmarks/LEARNED_EXPERIMENT.md`. Adds `Peer.download_stream`,
+  `SeedServer(delay=...)`, and `benchmarks/run_swarm_sim.py` (#25).
 
 ## 0.3.1
 

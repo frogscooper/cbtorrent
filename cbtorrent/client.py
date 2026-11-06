@@ -27,6 +27,10 @@ class DownloadError(Exception):
         self.report = report
 
 
+class StreamAbandoned(Exception):
+    """The policy ended a slow stream; its unfinished pieces return to the pool."""
+
+
 class MixedPieceError(ValueError):
     """A mixed-source hash failure cannot identify the corrupt contributor."""
 
@@ -86,6 +90,23 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
     metrics = Metrics()
     metrics.start()
     policy = policy or ThroughputPolicy()
+    slots = [concurrency]  # transfer slots now; a policy may adapt it within max_connections
+
+    def update_slots():
+        if hasattr(policy, "target_concurrency"):
+            target = policy.target_concurrency()
+            if type(target) is not int:
+                raise ValueError("policy returned a non-integer concurrency")
+            slots[0] = max(1, min(max_connections, target))
+        return slots[0]
+
+    def depth_for(address):
+        if not hasattr(policy, "pipeline_for"):
+            return pipeline
+        depth = policy.pipeline_for(address)
+        if type(depth) is not int:
+            raise ValueError("policy returned a non-integer pipeline depth")
+        return max(1, min(128, depth))
     observations, sessions, tasks, dialing = {}, {}, {}, {}  # dialing: task -> (address, step)
     active = {}
     retired, claimed = set(), set()
@@ -317,9 +338,11 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 active[address] = state
                 schedule_changed.set()
                 def on_block(received):
+                    if hasattr(policy, "record_bytes") and received > state.received:
+                        policy.record_bytes(received - state.received)
                     state.received = received
                     state.last_progress = perf_counter()
-                    if endgame and len(remaining) <= concurrency:
+                    if endgame and len(remaining) <= slots[0]:
                         schedule_changed.set()
                 def on_data(offset):
                     if work.raced:
@@ -328,7 +351,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                             if owner != address and other is not None:
                                 other.cancel_block(index, offset)
                 step[0] = "piece"
-                data = await peer.download_piece(index, pipeline, on_block=on_block,
+                data = await peer.download_piece(index, depth_for(address), on_block=on_block,
                                                   buffer=work, on_data=on_data,
                                                   endgame=duplicate is not None,
                                                   stall_delay=endgame_delay)
@@ -403,6 +426,204 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                 policy.attempt_finished(address, perf_counter() - started)
                 metrics.policy_update_seconds += perf_counter() - update_started
 
+    def make_context():
+        unscheduled = remaining - claimed
+        # Tail planning needs at most `slots` piece sizes, not a full copied
+        # bitfield/dictionary for every scheduling decision.
+        tail = unscheduled if len(unscheduled) <= slots[0] else set()
+        return SchedulingContext(
+            perf_counter(), len(unscheduled), {i: torrent.piece_size(i) for i in tail},
+            {p: frozenset(session.available & tail) for p, session in sessions.items()},
+            active.copy(), slots[0], torrent.piece_length)
+
+    def idle_ready_peers():
+        busy = set(tasks.values()) | {address for address, _ in dialing.values()}
+        wanted = remaining - claimed
+        now = perf_counter()
+        return [p for p, s in sessions.items() if p not in busy and p not in retired
+                and retry_at.get(p, 0) <= now and s.handshaken and s.available & wanted]
+
+    async def stream(address):
+        """Like transfer(), but keep one connection busy across consecutive pieces.
+
+        Each piece is verified and committed exactly as in transfer(). The policy
+        decides before every new claim whether this peer should take more work.
+        """
+        observation = observations.setdefault(address, Observation())
+        started = perf_counter()
+        peer = sessions.get(address)
+        before = peer.sent_bytes + peer.received_bytes if peer else 0
+        owned = {}
+        failed = interrupted = raced = False
+        step, deadline = ["connect"], None
+        mark = [None, 0]  # time and wire bytes at the last completed piece
+        claims = [0]
+        delivered = [0, 0.0]  # payload bytes this stream, last abandon check time
+        abandoned = False
+
+        def release(index):
+            work = owned.pop(index, None)
+            if work is None:
+                return
+            work.owners.discard(address)
+            if not work.owners:
+                claimed.discard(index)
+                pieces.pop(index, None)
+
+        try:
+            async with asyncio.timeout(piece_timeout) as deadline:
+                if peer is None:
+                    peer = await open_peer(address, step)
+                step[0] = "wait"
+                while True:
+                    missing = remaining - claimed
+                    if not missing:
+                        return
+                    if peer.available & missing:
+                        break
+                    await peer.receive()
+                state = ActiveTransfer(-1, 0, 0, perf_counter())
+                active[address] = state
+                mark[0], mark[1] = perf_counter(), peer.sent_bytes + peer.received_bytes
+                mark_start = mark[0]
+
+                def claim():
+                    # The scheduler chose this peer for the first piece; later
+                    # pieces need the policy's consent.
+                    if claims[0] and not policy.continue_stream(address, make_context(), idle_ready_peers()):
+                        return None
+                    useful = peer.available & (remaining - claimed)
+                    if not useful:
+                        return None
+                    index = min(useful, key=lambda i: (sum(i in p.available for p in sessions.values()), i))
+                    claimed.add(index)
+                    work = pieces[index] = PieceBuffer(torrent.piece_size(index))
+                    work.owners.add(address)
+                    owned[index] = work
+                    claims[0] += 1
+                    if state.index < 0 or state.index not in owned:
+                        state.index, state.size, state.received = index, torrent.piece_size(index), 0
+                    schedule_changed.set()
+                    return index, work
+
+                def on_block(index, size):
+                    if hasattr(policy, "record_bytes"):
+                        policy.record_bytes(size)
+                    if index == state.index:
+                        state.received += size
+                    now = state.last_progress = perf_counter()
+                    delivered[0] += size
+                    if endgame and len(remaining) <= slots[0]:
+                        schedule_changed.set()
+                    elapsed = now - mark_start
+                    if hasattr(policy, "abandon") and elapsed >= 1.0 and now - delivered[1] >= 0.5:
+                        delivered[1] = now
+                        if policy.abandon(address, delivered[0] / elapsed, make_context(), idle_ready_peers()):
+                            raise StreamAbandoned()
+
+                def on_data(index, offset):
+                    work = owned.get(index)
+                    if work is not None and work.raced:
+                        for owner in tuple(work.owners):
+                            other = sessions.get(owner)
+                            if owner != address and other is not None:
+                                other.cancel_block(index, offset)
+
+                async def on_piece(index, data):
+                    nonlocal raced
+                    work = owned[index]
+                    if work.invalid or index not in remaining:
+                        release(index)
+                        return
+                    step[0] = "verify"
+                    if sha1(data).digest() != torrent.hashes[index]:
+                        metrics.hash_failures += 1
+                        work.invalid = True
+                        for other_task, owner in tuple(tasks.items()):
+                            if owner in work.owners and other_task is not asyncio.current_task():
+                                other_task.cancel()
+                        if work.raced:
+                            raced = True
+                            isolated.add(index)
+                            raise MixedPieceError("mixed-source piece hash mismatch; retrying without endgame")
+                        raise ValueError("piece hash mismatch")
+                    try:
+                        storage.write(index, data)
+                    except OSError as error:
+                        raise DownloadError(str(error), report()) from error
+                    remaining.remove(index)
+                    metrics.verified_bytes += len(data)
+                    if work.raced:
+                        raced = True
+                        metrics.endgame_verified_bytes += len(data)
+                    for other_task, owner in tuple(tasks.items()):
+                        if owner in work.owners and other_task is not asyncio.current_task():
+                            other_task.cancel()
+                    release(index)
+                    now = perf_counter()
+                    wire = peer.sent_bytes + peer.received_bytes
+                    if not work.raced:
+                        # Back-to-back pieces overlap, so the interval between
+                        # completions is this connection's real delivery time.
+                        observation.record(len(data), now - mark[0], wire - mark[1])
+                        if hasattr(policy, "observe"):
+                            update_started = perf_counter()
+                            policy.observe(address, len(data), now - mark[0])
+                            metrics.policy_update_seconds += perf_counter() - update_started
+                    mark[0], mark[1] = now, wire
+                    deadline.reschedule(asyncio.get_running_loop().time() + piece_timeout)
+                    if owned:
+                        head = next(iter(owned))
+                        state.index, state.size = head, torrent.piece_size(head)
+                        state.received = owned[head].received_bytes
+                    else:
+                        state.index = -1
+                    step[0] = "have"
+                    await server.have(index)
+                    await peer.send(message(4, index.to_bytes(4, "big")))
+                    if progress is not None:
+                        progress(metrics.resumed_bytes + metrics.verified_bytes, torrent.length)
+                    emit()
+                    schedule_changed.set()
+                    step[0] = "piece"
+
+                step[0] = "piece"
+                await peer.download_stream(claim, lambda: depth_for(address), on_piece,
+                                           on_block=on_block, on_data=on_data)
+        except (OSError, ValueError, asyncio.TimeoutError, asyncio.IncompleteReadError) as error:
+            failed = True
+            peer = peer or sessions.get(address)
+            index = next(iter(owned), None)
+            await retire(address, error, step[0], failure_detail(error, step[0], deadline, index))
+        except StreamAbandoned:
+            # Not a peer failure. Learn its measured rate so it is not picked
+            # again soon; close the session, since cancelled blocks may still arrive.
+            abandoned = True
+            elapsed = perf_counter() - mark_start
+            if delivered[0] and elapsed > 0 and hasattr(policy, "observe"):
+                policy.observe(address, delivered[0], elapsed)
+        except asyncio.CancelledError:
+            interrupted = True
+            peer = peer or sessions.get(address)
+            raise
+        finally:
+            for index in tuple(owned):
+                release(index)
+            if peer is not None and (interrupted or raced or abandoned):
+                if sessions.get(address) is peer:
+                    sessions.pop(address)
+                await peer.close()
+            if peer is not None and (failed or mark[0] is None):
+                now_wire = peer.sent_bytes + peer.received_bytes
+                since = mark[0] if mark[0] is not None else started
+                base = mark[1] if mark[0] is not None else before
+                observation.record(0, perf_counter() - since, now_wire - base, failed)
+            elif peer is None:
+                observation.record(0, perf_counter() - started, 0, failed)
+            active.pop(address, None)
+            if hasattr(policy, "attempt_finished"):
+                policy.attempt_finished(address, perf_counter() - started)
+
     install_reset_filter()
     try:
         storage = Storage(torrent, output, resume=resume)
@@ -466,7 +687,8 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                         dialing[asyncio.create_task(dial(address, step))] = (address, step)
                         busy.add(address)
                         half_open += 1
-            while len(tasks) < concurrency and remaining - claimed:
+            update_slots()
+            while len(tasks) < slots[0] and remaining - claimed:
                 candidates = candidates_for(busy)
                 if not candidates:
                     break
@@ -487,11 +709,11 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                     unscheduled = remaining - claimed
                     # Tail planning needs at most concurrency piece sizes, not a
                     # full copied bitfield/dictionary for every scheduling decision.
-                    tail = unscheduled if len(unscheduled) <= concurrency else set()
+                    tail = unscheduled if len(unscheduled) <= slots[0] else set()
                     context = SchedulingContext(
                         perf_counter(), len(unscheduled), {i: torrent.piece_size(i) for i in tail},
                         {p: frozenset(session.available & tail) for p, session in sessions.items()},
-                        active.copy(), concurrency, torrent.piece_length)
+                        active.copy(), slots[0], torrent.piece_length)
                     address = policy.choose_with_context(candidates, observations, context)
                 else:
                     address = policy.choose(candidates, observations)
@@ -504,7 +726,8 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
                     raise ValueError("policy selected an ineligible peer")
                 if not await make_room(address, busy):
                     break
-                task = asyncio.create_task(transfer(address))
+                task = asyncio.create_task(stream(address) if getattr(policy, "stream", False)
+                                           else transfer(address))
                 tasks[task] = address
                 busy.add(address)
 
@@ -512,7 +735,7 @@ async def download(torrent, peers, output: Path, *, timeout=15.0, piece_timeout=
             # One spare transfer slot can rescue a stalled tail without adding
             # another piece buffer. At most two owners share any one assembly.
             if (endgame and endgame_reserved < endgame_budget and remaining <= claimed
-                    and len(remaining) <= concurrency and len(tasks) < min(max_connections, concurrency + 1)):
+                    and len(remaining) <= slots[0] and len(tasks) < min(max_connections, slots[0] + 1)):
                 for index, work in tuple(pieces.items()):
                     if (index not in remaining or index in isolated or index in endgame_pending
                             or len(work.owners) != 1 or work.invalid or not work.missing_bytes

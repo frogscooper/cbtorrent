@@ -10,7 +10,8 @@ from pathlib import Path
 from .client import DownloadError, download
 from .metainfo import create
 from .policy import (AdaptivePolicy, BanditPolicy, EWMAModel, OptimisticPolicy,
-                     PlannedHeuristic, RecoveryPolicy, ThroughputPolicy, TimeBudgetPolicy)
+                     PlannedHeuristic, RecoveryPolicy, ThroughputPolicy, TimeBudgetPolicy,
+                     LearnedPolicy)
 from .seeder import FileSource, SeedServer
 
 POLICIES = {
@@ -24,6 +25,7 @@ POLICIES = {
     "recovery-no-probe": lambda: RecoveryPolicy(probe=False),
     "ewma-probe": lambda: RecoveryPolicy(model_factory=EWMAModel),
     "timed": TimeBudgetPolicy,
+    "learned": LearnedPolicy,
 }
 
 

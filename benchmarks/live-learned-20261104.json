@@ -1,0 +1,903 @@
+{
+  "schema_version": 1,
+  "suite": "live-swarm",
+  "started_utc": "2026-11-04T23:24:17+00:00",
+  "finished_utc": "2026-11-05T00:03:36+00:00",
+  "code_commit": "c620eec6819f1260b25ff88f9e4e3dfddc47340e",
+  "python": "3.13.2",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "policies": [
+    "heuristic",
+    "learned"
+  ],
+  "rounds": 3,
+  "deadline_seconds": 1800.0,
+  "seed": 20261103,
+  "extra_args": [],
+  "note": "Home broadband, Windows 11, router UPnP/NAT-PMP off (no inbound), 2026-11-04; heuristic vs learned streaming policy",
+  "caveat": "Public swarms at one time from one network. Swarm state changes between trials; interleaving reduces but does not remove that drift. Small samples.",
+  "summary": [
+    {
+      "torrent": "debian.torrent",
+      "policy": "heuristic",
+      "attempts": 3,
+      "completed": 3,
+      "outcomes": {
+        "ok": 3
+      },
+      "median_completion_seconds": 331.9734708999749,
+      "completion_seconds": [
+        465.692,
+        331.973,
+        216.153
+      ],
+      "median_wire_received_bytes": 793365445,
+      "median_wasted_payload_bytes": 0,
+      "median_connections": 101,
+      "peer_failure_phases_total": {
+        "handshake": 81,
+        "piece": 17,
+        "connect": 167,
+        "unchoke": 12
+      }
+    },
+    {
+      "torrent": "debian.torrent",
+      "policy": "learned",
+      "attempts": 3,
+      "completed": 3,
+      "outcomes": {
+        "ok": 3
+      },
+      "median_completion_seconds": 38.72329410002567,
+      "completion_seconds": [
+        38.723,
+        38.141,
+        55.27
+      ],
+      "median_wire_received_bytes": 793392081,
+      "median_wasted_payload_bytes": 32768,
+      "median_connections": 45,
+      "peer_failure_phases_total": {
+        "handshake": 25,
+        "unchoke": 6,
+        "connect": 54,
+        "piece": 3
+      }
+    },
+    {
+      "torrent": "arch.torrent",
+      "policy": "heuristic",
+      "attempts": 3,
+      "completed": 3,
+      "outcomes": {
+        "ok": 3
+      },
+      "median_completion_seconds": 319.5396920000203,
+      "completion_seconds": [
+        303.955,
+        383.412,
+        319.54
+      ],
+      "median_wire_received_bytes": 1318630198,
+      "median_wasted_payload_bytes": 0,
+      "median_connections": 97,
+      "peer_failure_phases_total": {
+        "handshake": 22,
+        "piece": 6,
+        "connect": 214,
+        "unchoke": 11
+      }
+    },
+    {
+      "torrent": "arch.torrent",
+      "policy": "learned",
+      "attempts": 3,
+      "completed": 3,
+      "outcomes": {
+        "ok": 3
+      },
+      "median_completion_seconds": 63.78353619994596,
+      "completion_seconds": [
+        78.252,
+        63.784,
+        53.711
+      ],
+      "median_wire_received_bytes": 1319475912,
+      "median_wasted_payload_bytes": 851968,
+      "median_connections": 43,
+      "peer_failure_phases_total": {
+        "unchoke": 5,
+        "handshake": 3,
+        "piece": 5,
+        "connect": 77
+      }
+    }
+  ],
+  "paired_vs_baseline": {
+    "learned": {
+      "pairs": 6,
+      "median_ratio": 0.16722380162515166,
+      "ratios": [
+        0.083,
+        0.257,
+        0.115,
+        0.166,
+        0.256,
+        0.168
+      ]
+    }
+  },
+  "trials": [
+    {
+      "round": 0,
+      "torrent": "debian.torrent",
+      "policy": "learned",
+      "position": 0,
+      "outcome": "ok",
+      "complete": true,
+      "exit_code": 0,
+      "wall_seconds": 40.306,
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 38.72329410002567,
+        "elapsed_seconds": 38.72329410002567,
+        "cpu_seconds": 11.890625,
+        "verified_bytes": 792723456,
+        "payload_received_bytes": 792969216,
+        "wasted_payload_bytes": 245760,
+        "wire_sent_bytes": 854032,
+        "wire_received_bytes": 793609559,
+        "protocol_overhead_bytes": 1494375,
+        "uploaded_bytes": 0,
+        "connections": 39,
+        "peer_failures": 23,
+        "peer_retries": 17,
+        "hash_failures": 0,
+        "peers_banned": 0,
+        "endgame_duplicate_bytes": 0,
+        "tracker_requests": 1,
+        "tracker_failures": 0,
+        "dht_requests": 42,
+        "dht_failures": 12,
+        "dht_peers": 200,
+        "pex_peers": 3,
+        "policy_seconds": 0.0003264002734795213,
+        "peer_failure_phases": {
+          "handshake": 6,
+          "unchoke": 2,
+          "connect": 14,
+          "piece": 1
+        },
+        "incoming_peers": 0,
+        "dht_errors": [
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s"
+        ],
+        "port_mapping": {
+          "mapped": false,
+          "method": null,
+          "internal_port": 61564,
+          "external_port": null,
+          "lifetime": null,
+          "errors": [
+            "natpmp: NAT-PMP gateway did not reply",
+            "upnp: no UPnP gateway answered"
+          ]
+        }
+      },
+      "stderr_tail": ""
+    },
+    {
+      "round": 0,
+      "torrent": "debian.torrent",
+      "policy": "heuristic",
+      "position": 1,
+      "outcome": "ok",
+      "complete": true,
+      "exit_code": 0,
+      "wall_seconds": 466.629,
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 465.6916177999228,
+        "elapsed_seconds": 465.6916177999228,
+        "cpu_seconds": 27.5,
+        "verified_bytes": 792723456,
+        "payload_received_bytes": 792723456,
+        "wasted_payload_bytes": 0,
+        "wire_sent_bytes": 860336,
+        "wire_received_bytes": 793365445,
+        "protocol_overhead_bytes": 1502325,
+        "uploaded_bytes": 0,
+        "connections": 148,
+        "peer_failures": 132,
+        "peer_retries": 91,
+        "hash_failures": 0,
+        "peers_banned": 0,
+        "endgame_duplicate_bytes": 0,
+        "tracker_requests": 1,
+        "tracker_failures": 0,
+        "dht_requests": 83,
+        "dht_failures": 29,
+        "dht_peers": 400,
+        "pex_peers": 0,
+        "policy_seconds": 0.03839350014459342,
+        "peer_failure_phases": {
+          "handshake": 48,
+          "piece": 2,
+          "connect": 82
+        },
+        "incoming_peers": 0,
+        "dht_errors": [
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s"
+        ],
+        "port_mapping": {
+          "mapped": false,
+          "method": null,
+          "internal_port": 65388,
+          "external_port": null,
+          "lifetime": null,
+          "errors": [
+            "natpmp: NAT-PMP gateway did not reply",
+            "upnp: no UPnP gateway answered"
+          ]
+        }
+      },
+      "stderr_tail": ""
+    },
+    {
+      "round": 0,
+      "torrent": "arch.torrent",
+      "policy": "learned",
+      "position": 0,
+      "outcome": "ok",
+      "complete": true,
+      "exit_code": 0,
+      "wall_seconds": 78.617,
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 78.25167490006424,
+        "elapsed_seconds": 78.25167490006424,
+        "cpu_seconds": 18.0625,
+        "verified_bytes": 1317568512,
+        "payload_received_bytes": 1318420480,
+        "wasted_payload_bytes": 851968,
+        "wire_sent_bytes": 1397147,
+        "wire_received_bytes": 1319475912,
+        "protocol_overhead_bytes": 2452579,
+        "uploaded_bytes": 0,
+        "connections": 57,
+        "peer_failures": 41,
+        "peer_retries": 32,
+        "hash_failures": 0,
+        "peers_banned": 1,
+        "endgame_duplicate_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "dht_requests": 43,
+        "dht_failures": 10,
+        "dht_peers": 190,
+        "pex_peers": 7,
+        "policy_seconds": 0.0002590998774394393,
+        "peer_failure_phases": {
+          "unchoke": 3,
+          "handshake": 3,
+          "piece": 3,
+          "connect": 32
+        },
+        "incoming_peers": 0,
+        "dht_errors": [
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "announce_peer <address>: no reply within 2s",
+          "announce_peer <address>: no reply within 2s"
+        ],
+        "port_mapping": {
+          "mapped": false,
+          "method": null,
+          "internal_port": 49787,
+          "external_port": null,
+          "lifetime": null,
+          "errors": [
+            "natpmp: NAT-PMP gateway did not reply",
+            "upnp: no UPnP gateway answered"
+          ]
+        }
+      },
+      "stderr_tail": ""
+    },
+    {
+      "round": 0,
+      "torrent": "arch.torrent",
+      "policy": "heuristic",
+      "position": 1,
+      "outcome": "ok",
+      "complete": true,
+      "exit_code": 0,
+      "wall_seconds": 304.345,
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 303.9553398001008,
+        "elapsed_seconds": 303.9553398001008,
+        "cpu_seconds": 26.34375,
+        "verified_bytes": 1317568512,
+        "payload_received_bytes": 1317568512,
+        "wasted_payload_bytes": 0,
+        "wire_sent_bytes": 1398483,
+        "wire_received_bytes": 1318630198,
+        "protocol_overhead_bytes": 2460169,
+        "uploaded_bytes": 0,
+        "connections": 95,
+        "peer_failures": 79,
+        "peer_retries": 54,
+        "hash_failures": 0,
+        "peers_banned": 0,
+        "endgame_duplicate_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "dht_requests": 43,
+        "dht_failures": 18,
+        "dht_peers": 200,
+        "pex_peers": 5,
+        "policy_seconds": 0.02777570451144129,
+        "peer_failure_phases": {
+          "handshake": 9,
+          "piece": 3,
+          "connect": 63,
+          "unchoke": 4
+        },
+        "incoming_peers": 0,
+        "dht_errors": [
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s"
+        ],
+        "port_mapping": {
+          "mapped": false,
+          "method": null,
+          "internal_port": 49865,
+          "external_port": null,
+          "lifetime": null,
+          "errors": [
+            "natpmp: NAT-PMP gateway did not reply",
+            "upnp: no UPnP gateway answered"
+          ]
+        }
+      },
+      "stderr_tail": ""
+    },
+    {
+      "round": 1,
+      "torrent": "debian.torrent",
+      "policy": "learned",
+      "position": 0,
+      "outcome": "ok",
+      "complete": true,
+      "exit_code": 0,
+      "wall_seconds": 39.251,
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 38.141016800072975,
+        "elapsed_seconds": 38.141016800072975,
+        "cpu_seconds": 13.125,
+        "verified_bytes": 792723456,
+        "payload_received_bytes": 792723456,
+        "wasted_payload_bytes": 0,
+        "wire_sent_bytes": 854290,
+        "wire_received_bytes": 793362089,
+        "protocol_overhead_bytes": 1492923,
+        "uploaded_bytes": 0,
+        "connections": 45,
+        "peer_failures": 29,
+        "peer_retries": 21,
+        "hash_failures": 0,
+        "peers_banned": 0,
+        "endgame_duplicate_bytes": 0,
+        "tracker_requests": 1,
+        "tracker_failures": 0,
+        "dht_requests": 43,
+        "dht_failures": 7,
+        "dht_peers": 156,
+        "pex_peers": 51,
+        "policy_seconds": 0.00037530006375163794,
+        "peer_failure_phases": {
+          "handshake": 8,
+          "unchoke": 3,
+          "connect": 16,
+          "piece": 2
+        },
+        "incoming_peers": 0,
+        "dht_errors": [
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s"
+        ],
+        "port_mapping": {
+          "mapped": false,
+          "method": null,
+          "internal_port": 54975,
+          "external_port": null,
+          "lifetime": null,
+          "errors": [
+            "natpmp: NAT-PMP gateway did not reply",
+            "upnp: no UPnP gateway answered"
+          ]
+        }
+      },
+      "stderr_tail": ""
+    },
+    {
+      "round": 1,
+      "torrent": "debian.torrent",
+      "policy": "heuristic",
+      "position": 1,
+      "outcome": "ok",
+      "complete": true,
+      "exit_code": 0,
+      "wall_seconds": 333.081,
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 331.9734708999749,
+        "elapsed_seconds": 331.9734708999749,
+        "cpu_seconds": 20.703125,
+        "verified_bytes": 792723456,
+        "payload_received_bytes": 792903680,
+        "wasted_payload_bytes": 180224,
+        "wire_sent_bytes": 863471,
+        "wire_received_bytes": 793560777,
+        "protocol_overhead_bytes": 1520568,
+        "uploaded_bytes": 0,
+        "connections": 101,
+        "peer_failures": 85,
+        "peer_retries": 52,
+        "hash_failures": 0,
+        "peers_banned": 1,
+        "endgame_duplicate_bytes": 0,
+        "tracker_requests": 1,
+        "tracker_failures": 0,
+        "dht_requests": 82,
+        "dht_failures": 28,
+        "dht_peers": 400,
+        "pex_peers": 0,
+        "policy_seconds": 0.03728839766699821,
+        "peer_failure_phases": {
+          "handshake": 20,
+          "piece": 15,
+          "unchoke": 7,
+          "connect": 43
+        },
+        "incoming_peers": 0,
+        "dht_errors": [
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s"
+        ],
+        "port_mapping": {
+          "mapped": false,
+          "method": null,
+          "internal_port": 55034,
+          "external_port": null,
+          "lifetime": null,
+          "errors": [
+            "natpmp: NAT-PMP gateway did not reply",
+            "upnp: no UPnP gateway answered"
+          ]
+        }
+      },
+      "stderr_tail": ""
+    },
+    {
+      "round": 1,
+      "torrent": "arch.torrent",
+      "policy": "learned",
+      "position": 0,
+      "outcome": "ok",
+      "complete": true,
+      "exit_code": 0,
+      "wall_seconds": 64.145,
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 63.78353619994596,
+        "elapsed_seconds": 63.78353619994596,
+        "cpu_seconds": 16.90625,
+        "verified_bytes": 1317568512,
+        "payload_received_bytes": 1318469632,
+        "wasted_payload_bytes": 901120,
+        "wire_sent_bytes": 1396728,
+        "wire_received_bytes": 1319527335,
+        "protocol_overhead_bytes": 2454431,
+        "uploaded_bytes": 0,
+        "connections": 43,
+        "peer_failures": 25,
+        "peer_retries": 18,
+        "hash_failures": 0,
+        "peers_banned": 1,
+        "endgame_duplicate_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "dht_requests": 43,
+        "dht_failures": 12,
+        "dht_peers": 147,
+        "pex_peers": 23,
+        "policy_seconds": 0.0004406998632475734,
+        "peer_failure_phases": {
+          "unchoke": 1,
+          "connect": 22,
+          "piece": 2
+        },
+        "incoming_peers": 0,
+        "dht_errors": [
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s"
+        ],
+        "port_mapping": {
+          "mapped": false,
+          "method": null,
+          "internal_port": 49383,
+          "external_port": null,
+          "lifetime": null,
+          "errors": [
+            "natpmp: NAT-PMP gateway did not reply",
+            "upnp: no UPnP gateway answered"
+          ]
+        }
+      },
+      "stderr_tail": ""
+    },
+    {
+      "round": 1,
+      "torrent": "arch.torrent",
+      "policy": "heuristic",
+      "position": 1,
+      "outcome": "ok",
+      "complete": true,
+      "exit_code": 0,
+      "wall_seconds": 383.823,
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 383.4124933000421,
+        "elapsed_seconds": 383.4124933000421,
+        "cpu_seconds": 26.671875,
+        "verified_bytes": 1317568512,
+        "payload_received_bytes": 1317568512,
+        "wasted_payload_bytes": 0,
+        "wire_sent_bytes": 1396873,
+        "wire_received_bytes": 1318628860,
+        "protocol_overhead_bytes": 2457221,
+        "uploaded_bytes": 0,
+        "connections": 97,
+        "peer_failures": 81,
+        "peer_retries": 55,
+        "hash_failures": 0,
+        "peers_banned": 0,
+        "endgame_duplicate_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "dht_requests": 83,
+        "dht_failures": 43,
+        "dht_peers": 400,
+        "pex_peers": 2,
+        "policy_seconds": 0.02858169621322304,
+        "peer_failure_phases": {
+          "handshake": 8,
+          "connect": 69,
+          "unchoke": 4
+        },
+        "incoming_peers": 0,
+        "dht_errors": [
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s"
+        ],
+        "port_mapping": {
+          "mapped": false,
+          "method": null,
+          "internal_port": 50781,
+          "external_port": null,
+          "lifetime": null,
+          "errors": [
+            "natpmp: NAT-PMP gateway did not reply",
+            "upnp: no UPnP gateway answered"
+          ]
+        }
+      },
+      "stderr_tail": ""
+    },
+    {
+      "round": 2,
+      "torrent": "debian.torrent",
+      "policy": "learned",
+      "position": 0,
+      "outcome": "ok",
+      "complete": true,
+      "exit_code": 0,
+      "wall_seconds": 56.582,
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 55.27028510009404,
+        "elapsed_seconds": 55.27028510009404,
+        "cpu_seconds": 12.546875,
+        "verified_bytes": 792723456,
+        "payload_received_bytes": 792756224,
+        "wasted_payload_bytes": 32768,
+        "wire_sent_bytes": 852589,
+        "wire_received_bytes": 793392081,
+        "protocol_overhead_bytes": 1488446,
+        "uploaded_bytes": 0,
+        "connections": 53,
+        "peer_failures": 36,
+        "peer_retries": 24,
+        "hash_failures": 0,
+        "peers_banned": 0,
+        "endgame_duplicate_bytes": 0,
+        "tracker_requests": 1,
+        "tracker_failures": 0,
+        "dht_requests": 43,
+        "dht_failures": 10,
+        "dht_peers": 200,
+        "pex_peers": 0,
+        "policy_seconds": 0.0002536999527364969,
+        "peer_failure_phases": {
+          "handshake": 11,
+          "connect": 24,
+          "unchoke": 1
+        },
+        "incoming_peers": 0,
+        "dht_errors": [
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s"
+        ],
+        "port_mapping": {
+          "mapped": false,
+          "method": null,
+          "internal_port": 53603,
+          "external_port": null,
+          "lifetime": null,
+          "errors": [
+            "natpmp: NAT-PMP gateway did not reply",
+            "upnp: no UPnP gateway answered"
+          ]
+        }
+      },
+      "stderr_tail": ""
+    },
+    {
+      "round": 2,
+      "torrent": "debian.torrent",
+      "policy": "heuristic",
+      "position": 1,
+      "outcome": "ok",
+      "complete": true,
+      "exit_code": 0,
+      "wall_seconds": 217.081,
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 216.1531563999597,
+        "elapsed_seconds": 216.1531563999597,
+        "cpu_seconds": 21.046875,
+        "verified_bytes": 792723456,
+        "payload_received_bytes": 792723456,
+        "wasted_payload_bytes": 0,
+        "wire_sent_bytes": 856598,
+        "wire_received_bytes": 793364954,
+        "protocol_overhead_bytes": 1498096,
+        "uploaded_bytes": 0,
+        "connections": 76,
+        "peer_failures": 60,
+        "peer_retries": 41,
+        "hash_failures": 0,
+        "peers_banned": 0,
+        "endgame_duplicate_bytes": 0,
+        "tracker_requests": 1,
+        "tracker_failures": 0,
+        "dht_requests": 43,
+        "dht_failures": 6,
+        "dht_peers": 2,
+        "pex_peers": 75,
+        "policy_seconds": 0.033180304104462266,
+        "peer_failure_phases": {
+          "handshake": 13,
+          "unchoke": 5,
+          "connect": 42
+        },
+        "incoming_peers": 0,
+        "dht_errors": [
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s"
+        ],
+        "port_mapping": {
+          "mapped": false,
+          "method": null,
+          "internal_port": 53721,
+          "external_port": null,
+          "lifetime": null,
+          "errors": [
+            "natpmp: NAT-PMP gateway did not reply",
+            "upnp: no UPnP gateway answered"
+          ]
+        }
+      },
+      "stderr_tail": ""
+    },
+    {
+      "round": 2,
+      "torrent": "arch.torrent",
+      "policy": "learned",
+      "position": 0,
+      "outcome": "ok",
+      "complete": true,
+      "exit_code": 0,
+      "wall_seconds": 54.104,
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 53.711466199951246,
+        "elapsed_seconds": 53.711466199951246,
+        "cpu_seconds": 17.4375,
+        "verified_bytes": 1317568512,
+        "payload_received_bytes": 1317584896,
+        "wasted_payload_bytes": 16384,
+        "wire_sent_bytes": 1392166,
+        "wire_received_bytes": 1318637094,
+        "protocol_overhead_bytes": 2444364,
+        "uploaded_bytes": 0,
+        "connections": 38,
+        "peer_failures": 24,
+        "peer_retries": 13,
+        "hash_failures": 0,
+        "peers_banned": 0,
+        "endgame_duplicate_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "dht_requests": 42,
+        "dht_failures": 20,
+        "dht_peers": 200,
+        "pex_peers": 0,
+        "policy_seconds": 0.00033320009242743254,
+        "peer_failure_phases": {
+          "connect": 23,
+          "unchoke": 1
+        },
+        "incoming_peers": 0,
+        "dht_errors": [
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s"
+        ],
+        "port_mapping": {
+          "mapped": false,
+          "method": null,
+          "internal_port": 65508,
+          "external_port": null,
+          "lifetime": null,
+          "errors": [
+            "natpmp: NAT-PMP gateway did not reply",
+            "upnp: no UPnP gateway answered"
+          ]
+        }
+      },
+      "stderr_tail": ""
+    },
+    {
+      "round": 2,
+      "torrent": "arch.torrent",
+      "policy": "heuristic",
+      "position": 1,
+      "outcome": "ok",
+      "complete": true,
+      "exit_code": 0,
+      "wall_seconds": 319.933,
+      "metrics": {
+        "complete": true,
+        "completion_seconds": 319.5396920000203,
+        "elapsed_seconds": 319.5396920000203,
+        "cpu_seconds": 25.203125,
+        "verified_bytes": 1317568512,
+        "payload_received_bytes": 1317830656,
+        "wasted_payload_bytes": 262144,
+        "wire_sent_bytes": 1398784,
+        "wire_received_bytes": 1318890854,
+        "protocol_overhead_bytes": 2458982,
+        "uploaded_bytes": 0,
+        "connections": 109,
+        "peer_failures": 93,
+        "peer_retries": 62,
+        "hash_failures": 0,
+        "peers_banned": 0,
+        "endgame_duplicate_bytes": 0,
+        "tracker_requests": 0,
+        "tracker_failures": 0,
+        "dht_requests": 83,
+        "dht_failures": 33,
+        "dht_peers": 400,
+        "pex_peers": 0,
+        "policy_seconds": 0.028548401198349893,
+        "peer_failure_phases": {
+          "connect": 82,
+          "handshake": 5,
+          "piece": 3,
+          "unchoke": 3
+        },
+        "incoming_peers": 0,
+        "dht_errors": [
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s",
+          "get_peers <address>: no reply within 2s"
+        ],
+        "port_mapping": {
+          "mapped": false,
+          "method": null,
+          "internal_port": 51610,
+          "external_port": null,
+          "lifetime": null,
+          "errors": [
+            "natpmp: NAT-PMP gateway did not reply",
+            "upnp: no UPnP gateway answered"
+          ]
+        }
+      },
+      "stderr_tail": ""
+    }
+  ]
+}

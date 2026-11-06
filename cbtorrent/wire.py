@@ -229,6 +229,83 @@ class Peer:
                 pass
             self.pending.clear()
 
+    async def download_stream(self, claim, window, on_piece, *, on_block=None, on_data=None,
+                              max_pieces=3):
+        """Fetch pieces back to back on one connection without draining its queue.
+
+        claim() returns (index, PieceBuffer) for a further piece, or None to stop
+        taking new work. It is called only when every block of the pieces in hand
+        has been requested and window() still has room, so a new piece's requests
+        overlap the previous piece's replies. At most max_pieces buffers are held.
+        on_piece(index, data) is awaited for each completed piece; raising from it
+        ends the stream. window() is read again before each request.
+        """
+        hand = []  # [index, buffer, next block position], in claim order
+        exhausted = False
+        try:
+            while True:
+                limit = window()
+                while not self.choked and len(self.pending) < limit:
+                    entry = next((e for e in hand if e[2] < len(e[1].blocks)), None)
+                    if entry is None:
+                        if exhausted or len(hand) >= max_pieces:
+                            break
+                        claimed = claim()
+                        if claimed is None:
+                            exhausted = True
+                            break
+                        hand.append([claimed[0], claimed[1], 0])
+                        continue
+                    index, buffer, position = entry
+                    offset, length = buffer.blocks[position]
+                    entry[2] += 1
+                    if offset in buffer.received:
+                        continue
+                    self.pending[index, offset] = length
+                    await self.send(message(6, struct.pack("!III", index, offset, length)))
+                if not hand:
+                    return
+                kind, payload = await self.receive()
+                if kind == 0:
+                    raise ConnectionError("peer choked during piece transfer")
+                if kind != 7:
+                    continue
+                if len(payload) < 8:
+                    raise ValueError("truncated piece message")
+                piece, offset = struct.unpack("!II", payload[:8])
+                block = payload[8:]
+                if len(block) != self.pending.get((piece, offset)):
+                    raise ValueError("unsolicited or incorrectly sized block")
+                del self.pending[piece, offset]
+                entry = next((e for e in hand if e[0] == piece), None)
+                if entry is None:  # another endgame owner already completed it
+                    self.metrics.endgame_duplicate_bytes += len(block)
+                    continue
+                buffer = entry[1]
+                if buffer.accept(offset, block):
+                    if on_block is not None:
+                        on_block(piece, len(block))
+                    if on_data is not None:
+                        on_data(piece, offset)
+                elif buffer.raced:
+                    self.metrics.endgame_duplicate_bytes += len(block)
+                if not buffer.missing_bytes:
+                    hand.remove(entry)
+                    for key in [k for k in self.pending if k[0] == piece]:
+                        self.cancel_block(*key)
+                        del self.pending[key]
+                    await on_piece(piece, bytes(buffer.data))
+        finally:
+            try:
+                for piece, offset in tuple(self.pending):
+                    self.cancel_block(piece, offset)
+                if self.pending:
+                    async with asyncio.timeout(min(self.timeout, 0.25)):
+                        await self.writer.drain()
+            except (OSError, asyncio.TimeoutError):
+                pass
+            self.pending.clear()
+
     async def close(self):
         self.writer.close()
         try:
