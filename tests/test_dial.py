@@ -53,12 +53,17 @@ class DialAheadTests(unittest.IsolatedAsyncioTestCase):
         silent = await self.silent_peers(6)
         good = await self.good_peer()
         policy = ThroughputPolicy()  # explores peers in list order
+        timeout = 3.0
         report = await asyncio.wait_for(download(
             self.torrent, silent + [good], self.root / "out", use_trackers=False,
-            concurrency=1, timeout=1.0, piece_timeout=5.0, policy=policy), 5)
+            concurrency=1, timeout=timeout, piece_timeout=5.0, policy=policy), 30)
         self.assertEqual((self.root / "out").read_bytes(), self.data)
-        # Without dial-ahead the single slot spends 1s on each silent peer first.
-        self.assertLess(report["completion_seconds"], 0.9)
+        # Without dial-ahead the single slot spends one timeout on each silent
+        # peer first, and each of those ends as a peer failure. Check that
+        # structurally, not with a tight wall-clock bound: the test loop runs in
+        # asyncio debug mode, which is several times slower on Windows.
+        self.assertEqual(report["peer_failures"], 0)
+        self.assertLess(report["completion_seconds"], timeout)
         self.assertEqual(report["peer_observations"][f"{good[0]}:{good[1]}"]["verified_bytes"],
                          len(self.data))
         for host, port in silent:
@@ -95,11 +100,15 @@ class DialAheadTests(unittest.IsolatedAsyncioTestCase):
         """Connected peers waiting for an unchoke are not half-open attempts."""
         choking = await self.choking_peers(DIAL_AHEAD)
         good = await self.good_peer()
+        piece_timeout = 5.0
         report = await asyncio.wait_for(download(
             self.torrent, choking + [good], self.root / "out", use_trackers=False,
-            concurrency=1, timeout=1.0, piece_timeout=5.0), 10)
+            concurrency=1, timeout=1.0, piece_timeout=piece_timeout), 30)
         self.assertEqual((self.root / "out").read_bytes(), self.data)
-        self.assertLess(report["completion_seconds"], 0.9)
+        # If waiting-for-unchoke peers held dial slots, the good peer would be
+        # dialed only after a choking dial hit piece_timeout and failed.
+        self.assertEqual(report["peer_failures"], 0)
+        self.assertLess(report["completion_seconds"], piece_timeout)
 
     async def test_failed_dials_are_reported_and_end_the_download(self):
         silent = await self.silent_peers(3)
